@@ -1,0 +1,9 @@
+streamlit
+pynomo
+matplotlib
+numpy
+scipy
+pyx
+PyPDF2
+PyPDF2.pdf
+reportlab
