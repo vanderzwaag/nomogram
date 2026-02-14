@@ -1,0 +1,8 @@
+build-essential
+gfortran
+libopenblas-dev
+liblapack-dev
+ghostscript
+texlive
+texlive-latex-extra
+dvipng
