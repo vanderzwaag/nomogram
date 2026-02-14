@@ -66,7 +66,7 @@ st.set_page_config(layout="wide")
 st.sidebar.header("1. Institutional Baseline")
 ibw_base = st.sidebar.slider("Baseline IBW (kg)", 40, 120, 70)
 h_base = st.sidebar.slider("Baseline Bolus (IU/kg)", 250, 600, 300, step=50)
-p_base = st.sidebar.slider("Baseline Prime (IU)", 0, 10000, 5000, , step=500)
+p_base = st.sidebar.slider("Baseline Prime (IU)", 0, 10000, 5000, step=500)
 t_to_base = st.sidebar.slider("Baseline Time to CPB (min)", 5, 40, 15)
 t_on_base = st.sidebar.slider("Baseline Time on CPB (min)", 15, 120, 60)
 
