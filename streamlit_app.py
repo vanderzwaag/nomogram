@@ -72,11 +72,11 @@ t_on_base = st.sidebar.slider("Baseline Time on CPB (min)", 15, 120, 60)
 
 st.sidebar.divider()
 st.sidebar.header("2. Plot My Patient")
-pat_ibw = st.sidebar.number_input("Patient IBW (kg)", value=float(ibw_base), step=1)
-pat_h_kg = st.sidebar.number_input("Patient Bolus (IU/kg)", value=float(h_base), step=50)
-pat_p_hep = st.sidebar.number_input("Patient Prime (IU)", value=float(p_base), step=500)
-pat_t_to = st.sidebar.number_input("Patient Time to CPB (min)", value=float(t_to_base), step=1)
-pat_t_on = st.sidebar.number_input("Patient Time on CPB (min)", value=float(t_on_base), step=1)
+pat_ibw = st.sidebar.number_input("Patient IBW (kg)", value=float(ibw_base), step=1.0)
+pat_h_kg = st.sidebar.number_input("Patient Bolus (IU/kg)", value=float(h_base), step=50.0)
+pat_p_hep = st.sidebar.number_input("Patient Prime (IU)", value=float(p_base), step=500.0)
+pat_t_to = st.sidebar.number_input("Patient Time to CPB (min)", value=float(t_to_base), step=1.0)
+pat_t_on = st.sidebar.number_input("Patient Time on CPB (min)", value=float(t_on_base), step=1.0)
 
 show_patient = st.sidebar.checkbox("Plot my patient", value=True)
 
