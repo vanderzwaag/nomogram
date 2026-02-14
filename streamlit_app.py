@@ -62,22 +62,21 @@ def prodose_remaining(t, heparin_bolus, heparin_prime, ibw_val, time_to_cpb):
 # 2. SIDEBAR INPUTS
 # ==========================================
 st.set_page_config(layout="wide")
-st.title("Heparin Nomogram: Institutional Baseline vs. Patient Plot")
 
 st.sidebar.header("1. Institutional Baseline")
 ibw_base = st.sidebar.slider("Baseline IBW (kg)", 40, 120, 70)
-h_base = st.sidebar.slider("Baseline Bolus (IU/kg)", 250, 600, 300)
-p_base = st.sidebar.slider("Baseline Prime (IU)", 0, 10000, 5000)
+h_base = st.sidebar.slider("Baseline Bolus (IU/kg)", 250, 600, 300, step=50)
+p_base = st.sidebar.slider("Baseline Prime (IU)", 0, 10000, 5000, , step=500)
 t_to_base = st.sidebar.slider("Baseline Time to CPB (min)", 5, 40, 15)
 t_on_base = st.sidebar.slider("Baseline Time on CPB (min)", 15, 120, 60)
 
 st.sidebar.divider()
 st.sidebar.header("2. Plot My Patient")
-pat_ibw = st.sidebar.number_input("Patient IBW (kg)", value=float(ibw_base))
-pat_h_kg = st.sidebar.number_input("Patient Bolus (IU/kg)", value=float(h_base))
-pat_p_hep = st.sidebar.number_input("Patient Prime (IU)", value=float(p_base))
-pat_t_to = st.sidebar.number_input("Patient Time to CPB (min)", value=float(t_to_base))
-pat_t_on = st.sidebar.number_input("Patient Time on CPB (min)", value=float(t_on_base))
+pat_ibw = st.sidebar.number_input("Patient IBW (kg)", value=float(ibw_base), step=1)
+pat_h_kg = st.sidebar.number_input("Patient Bolus (IU/kg)", value=float(h_base), step=50)
+pat_p_hep = st.sidebar.number_input("Patient Prime (IU)", value=float(p_base), step=500)
+pat_t_to = st.sidebar.number_input("Patient Time to CPB (min)", value=float(t_to_base), step=1)
+pat_t_on = st.sidebar.number_input("Patient Time on CPB (min)", value=float(t_on_base), step=1)
 
 show_patient = st.sidebar.checkbox("Plot my patient", value=True)
 
