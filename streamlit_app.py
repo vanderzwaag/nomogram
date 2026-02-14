@@ -81,7 +81,7 @@ pat_t_on = st.sidebar.number_input("Patient Time on CPB (min)", value=float(t_on
 # ==========================================
 # 3. TABS
 # ==========================================
-tab_clinical, tab_diagnostics = st.tabs(["🚀 Clinical Dashboard", "🔬 Download PDF and Run Diagnostics"])
+tab_clinical, tab_diagnostics = st.tabs(["🚀 Educational Dashboard", "🔬 Download PDF and Run Diagnostics"])
 
 with tab_clinical:
     k_stats = get_k_stats(h_base, ibw_base, t_to_base, t_on_base, p_base)
