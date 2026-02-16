@@ -406,12 +406,122 @@ pat_t_on = st.sidebar.number_input("Patient Time on CPB (min)", value=float(t_on
 # ==========================================
 # 3. TABS
 # ==========================================
-tab_clinical, tab_nomogram, tab_diagnostics = st.tabs(["🚀 Decay Curves", "📐 Interactive Nomogram", "🔬 Diagnostics & PDF"])
+tab_compare, tab_clinical, tab_nomogram, tab_diagnostics = st.tabs(["Compare Models", "🚀 Decay Curves", "📐 Interactive Nomogram", "🔬 Diagnostics & PDF"])
 
 # Load Table for selected model
 k_table = load_k_table(model_choice)
 k_stats = get_k_stats(h_base, ibw_base, t_to_base, t_on_base, p_base, k_table)
 k_mu, k_lo, k_hi = k_stats['mu'], k_stats['lo'], k_stats['hi']
+
+with tab_compare:
+    # Models to compare
+    comp_models = ["Lanoiselee", "Delavenne", "Jia", "Meesters", "PRODOSE"]
+    
+    # Prepare data inputs based on sidebar "Plot My Patient" values
+    c_ibw = pat_ibw
+    c_bolus_kg = pat_h_kg
+    c_bolus_total = c_bolus_kg * c_ibw
+    c_prime = pat_p_hep
+    c_t_to = pat_t_to
+    c_t_on = pat_t_on
+    c_end_time = c_t_to + c_t_on
+    
+    # 2. Toggles row
+    st.markdown("##### 95% Credible Intervals (CrI) Display")
+    t_col1, t_col2, t_col3, _ = st.columns([1, 1, 1, 1.5])
+    with t_col1:
+        show_lan_cri = st.checkbox("Lanoiselee", value=False)
+    with t_col2:
+        show_del_cri = st.checkbox("Delavenne", value=False)
+    with t_col3:
+        show_jia_cri = st.checkbox("Jia", value=False)
+    
+    # Create layout
+    col_comp_plot, col_comp_data = st.columns([3, 1])
+    
+    with col_comp_plot:
+        fig, ax = plt.subplots(figsize=(10, 6))
+        t_plot = np.linspace(0, 120, 121)
+    
+        # --- Lanoiselee ---
+        if show_lan_cri:
+            t_lan, lo_lan, med_lan, hi_lan = get_lanoiselee_cri(c_bolus_total, [(c_t_to, c_prime)])
+            ax.fill_between(t_lan, lo_lan, hi_lan, color='tab:blue', alpha=0.15)
+        
+        y_lan = [get_reference_remaining("Lanoiselee", t, c_bolus_total, c_prime, c_ibw, c_t_to, c_t_on) for t in t_plot]
+        ax.plot(t_plot, y_lan, color='tab:blue', lw=2, label='Lanoiselee')
+    
+        # --- Delavenne ---
+        if show_del_cri:
+            t_del, lo_del, med_del, hi_del = get_delavenne_cri(c_bolus_total, [(c_t_to, c_prime)], c_ibw)
+            ax.fill_between(t_del, lo_del, hi_del, color='purple', alpha=0.15)
+        
+        y_del = [get_reference_remaining("Delavenne", t, c_bolus_total, c_prime, c_ibw, c_t_to, c_t_on) for t in t_plot]
+        ax.plot(t_plot, y_del, color='purple', lw=2, label='Delavenne')
+    
+        # --- Jia ---
+        if show_jia_cri:
+            t_jia, lo_jia, med_jia, hi_jia = get_jia_cri(c_bolus_total, [(c_t_to, c_prime)], c_ibw)
+            ax.fill_between(t_jia, lo_jia, hi_jia, color='green', alpha=0.15)
+        
+        y_jia = [get_reference_remaining("Jia", t, c_bolus_total, c_prime, c_ibw, c_t_to, c_t_on) for t in t_plot]
+        ax.plot(t_plot, y_jia, color='green', lw=2, label='Jia')
+    
+        # --- Meesters & PRODOSE ---
+        y_mee = [get_reference_remaining("Meesters", t, c_bolus_total, c_prime, c_ibw, c_t_to, c_t_on) for t in t_plot]
+        ax.plot(t_plot, y_mee, color='tab:red', lw=2, linestyle='--', label='Meesters')
+    
+        y_pro = [get_reference_remaining("PRODOSE", t, c_bolus_total, c_prime, c_ibw, c_t_to, c_t_on) for t in t_plot]
+        ax.plot(t_plot, y_pro, color='tab:orange', lw=2, linestyle='--', label='PRODOSE')
+    
+        # Plot Visuals
+        ax.axvline(x=c_end_time, color='black', linestyle=':', label="End of CPB")
+        ax.set_xlabel("Time (min)")
+        ax.set_ylabel("Heparin Amount (IU)")
+        ax.legend(loc='upper right', fontsize='small', ncol=2)
+        ax.grid(True, alpha=0.3)
+        
+        st.pyplot(fig)
+    
+    with col_comp_data:
+        st.subheader("Remaining Heparin")
+        st.caption(f"Calculated at End of CPB ({c_end_time:.0f} min)")
+        
+        results = []
+        
+        # Calculate end-points (using same color mapping as plot)
+        # Map: Model -> Color Code
+        color_map = {
+            "Lanoiselee": "#1f77b4", # tab:blue
+            "Delavenne": "purple",
+            "Jia": "green",
+            "Meesters": "#d62728",   # tab:red
+            "PRODOSE": "#ff7f0e"     # tab:orange
+        }
+    
+        for model in comp_models:
+            rem_dose = get_reference_remaining(model, c_end_time, c_bolus_total, c_prime, c_ibw, c_t_to, c_t_on)
+            results.append((model, rem_dose, color_map[model]))
+        
+        # Sort by remaining dose
+        results.sort(key=lambda x: x[1], reverse=True)
+    
+        # Display
+        for model_name, dose, color in results:
+            st.markdown(
+                f"""
+                <div style="
+                    border-left: 5px solid {color}; 
+                    padding-left: 10px; 
+                    margin-bottom: 10px; 
+                    background-color: rgba(255,255,255,0.05); 
+                    border-radius: 0 5px 5px 0;">
+                    <p style="margin:0; font-size: 0.9em; color: gray;">{model_name}</p>
+                    <p style="margin:0; font-size: 1.2em; font-weight: bold;">{dose:,.0f} IU</p>
+                </div>
+                """, 
+                unsafe_allow_html=True
+            )
 
 with tab_clinical:
     if k_table is None:
