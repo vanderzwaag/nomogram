@@ -426,16 +426,35 @@ with tab_compare:
     c_t_on = pat_t_on
     c_end_time = c_t_to + c_t_on
     
-    # 2. Toggles row
+    # --- NEW: Model Selection Row ---
+    st.markdown("##### Select Models to Display")
+    m_col1, m_col2, m_col3, m_col4, m_col5 = st.columns(5)
+    
+    with m_col1:
+        show_lan = st.checkbox("Lanoiselee", value=True)
+    with m_col2:
+        show_del = st.checkbox("Delavenne", value=True)
+    with m_col3:
+        show_jia = st.checkbox("Jia", value=True)
+    with m_col4:
+        show_mee = st.checkbox("Meesters", value=True)
+    with m_col5:
+        show_pro = st.checkbox("PRODOSE", value=True)
+
+    # 2. Credible Intervals Toggles row (Existing)
     st.markdown("##### 95% Credible Intervals (CrI) Display")
     t_col1, t_col2, t_col3, _ = st.columns([1, 1, 1, 1.5])
-    with t_col1:
-        show_lan_cri = st.checkbox("Lanoiselee", value=False)
-    with t_col2:
-        show_del_cri = st.checkbox("Delavenne", value=False)
-    with t_col3:
-        show_jia_cri = st.checkbox("Jia", value=False)
     
+    # Only show CrI checkbox if the parent model is actually selected (optional UI polish)
+    with t_col1:
+        show_lan_cri = st.checkbox("Lanoiselee CrI", value=False, disabled=not show_lan)
+    with t_col2:
+        show_del_cri = st.checkbox("Delavenne CrI", value=False, disabled=not show_del)
+    with t_col3:
+        show_jia_cri = st.checkbox("Jia CrI", value=False, disabled=not show_jia)
+    
+    st.divider()
+
     # Create layout
     col_comp_plot, col_comp_data = st.columns([3, 1])
     
@@ -444,35 +463,41 @@ with tab_compare:
         t_plot = np.linspace(0, 120, 121)
     
         # --- Lanoiselee ---
-        if show_lan_cri:
-            t_lan, lo_lan, med_lan, hi_lan = get_lanoiselee_cri(c_bolus_total, [(c_t_to, c_prime)])
-            ax.fill_between(t_lan, lo_lan, hi_lan, color='tab:blue', alpha=0.15)
-        
-        y_lan = [get_reference_remaining("Lanoiselee", t, c_bolus_total, c_prime, c_ibw, c_t_to, c_t_on) for t in t_plot]
-        ax.plot(t_plot, y_lan, color='tab:blue', lw=2, label='Lanoiselee')
+        if show_lan:
+            if show_lan_cri:
+                t_lan, lo_lan, med_lan, hi_lan = get_lanoiselee_cri(c_bolus_total, [(c_t_to, c_prime)])
+                ax.fill_between(t_lan, lo_lan, hi_lan, color='tab:blue', alpha=0.15)
+            
+            y_lan = [get_reference_remaining("Lanoiselee", t, c_bolus_total, c_prime, c_ibw, c_t_to, c_t_on) for t in t_plot]
+            ax.plot(t_plot, y_lan, color='tab:blue', lw=2, label='Lanoiselee')
     
         # --- Delavenne ---
-        if show_del_cri:
-            t_del, lo_del, med_del, hi_del = get_delavenne_cri(c_bolus_total, [(c_t_to, c_prime)], c_ibw)
-            ax.fill_between(t_del, lo_del, hi_del, color='purple', alpha=0.15)
-        
-        y_del = [get_reference_remaining("Delavenne", t, c_bolus_total, c_prime, c_ibw, c_t_to, c_t_on) for t in t_plot]
-        ax.plot(t_plot, y_del, color='purple', lw=2, label='Delavenne')
+        if show_del:
+            if show_del_cri:
+                t_del, lo_del, med_del, hi_del = get_delavenne_cri(c_bolus_total, [(c_t_to, c_prime)], c_ibw)
+                ax.fill_between(t_del, lo_del, hi_del, color='purple', alpha=0.15)
+            
+            y_del = [get_reference_remaining("Delavenne", t, c_bolus_total, c_prime, c_ibw, c_t_to, c_t_on) for t in t_plot]
+            ax.plot(t_plot, y_del, color='purple', lw=2, label='Delavenne')
     
         # --- Jia ---
-        if show_jia_cri:
-            t_jia, lo_jia, med_jia, hi_jia = get_jia_cri(c_bolus_total, [(c_t_to, c_prime)], c_ibw)
-            ax.fill_between(t_jia, lo_jia, hi_jia, color='green', alpha=0.15)
-        
-        y_jia = [get_reference_remaining("Jia", t, c_bolus_total, c_prime, c_ibw, c_t_to, c_t_on) for t in t_plot]
-        ax.plot(t_plot, y_jia, color='green', lw=2, label='Jia')
+        if show_jia:
+            if show_jia_cri:
+                t_jia, lo_jia, med_jia, hi_jia = get_jia_cri(c_bolus_total, [(c_t_to, c_prime)], c_ibw)
+                ax.fill_between(t_jia, lo_jia, hi_jia, color='green', alpha=0.15)
+            
+            y_jia = [get_reference_remaining("Jia", t, c_bolus_total, c_prime, c_ibw, c_t_to, c_t_on) for t in t_plot]
+            ax.plot(t_plot, y_jia, color='green', lw=2, label='Jia')
     
-        # --- Meesters & PRODOSE ---
-        y_mee = [get_reference_remaining("Meesters", t, c_bolus_total, c_prime, c_ibw, c_t_to, c_t_on) for t in t_plot]
-        ax.plot(t_plot, y_mee, color='tab:red', lw=2, linestyle='--', label='Meesters')
+        # --- Meesters ---
+        if show_mee:
+            y_mee = [get_reference_remaining("Meesters", t, c_bolus_total, c_prime, c_ibw, c_t_to, c_t_on) for t in t_plot]
+            ax.plot(t_plot, y_mee, color='tab:red', lw=2, linestyle='--', label='Meesters')
     
-        y_pro = [get_reference_remaining("PRODOSE", t, c_bolus_total, c_prime, c_ibw, c_t_to, c_t_on) for t in t_plot]
-        ax.plot(t_plot, y_pro, color='tab:orange', lw=2, linestyle='--', label='PRODOSE')
+        # --- PRODOSE ---
+        if show_pro:
+            y_pro = [get_reference_remaining("PRODOSE", t, c_bolus_total, c_prime, c_ibw, c_t_to, c_t_on) for t in t_plot]
+            ax.plot(t_plot, y_pro, color='tab:orange', lw=2, linestyle='--', label='PRODOSE')
     
         # Plot Visuals
         ax.axvline(x=c_end_time, color='black', linestyle=':', label="End of CPB")
@@ -489,8 +514,7 @@ with tab_compare:
         
         results = []
         
-        # Calculate end-points (using same color mapping as plot)
-        # Map: Model -> Color Code
+        # Color Map
         color_map = {
             "Lanoiselee": "#1f77b4", # tab:blue
             "Delavenne": "purple",
@@ -498,30 +522,44 @@ with tab_compare:
             "Meesters": "#d62728",   # tab:red
             "PRODOSE": "#ff7f0e"     # tab:orange
         }
-    
+
+        # Visibility Map (Links model name to checkbox state)
+        visibility_map = {
+            "Lanoiselee": show_lan,
+            "Delavenne": show_del,
+            "Jia": show_jia,
+            "Meesters": show_mee,
+            "PRODOSE": show_pro
+        }
+        
         for model in comp_models:
-            rem_dose = get_reference_remaining(model, c_end_time, c_bolus_total, c_prime, c_ibw, c_t_to, c_t_on)
-            results.append((model, rem_dose, color_map[model]))
+            # Check if this model was selected via checkbox
+            if visibility_map[model]:
+                rem_dose = get_reference_remaining(model, c_end_time, c_bolus_total, c_prime, c_ibw, c_t_to, c_t_on)
+                results.append((model, rem_dose, color_map[model]))
         
         # Sort by remaining dose
         results.sort(key=lambda x: x[1], reverse=True)
-    
+        
         # Display
-        for model_name, dose, color in results:
-            st.markdown(
-                f"""
-                <div style="
-                    border-left: 5px solid {color}; 
-                    padding-left: 10px; 
-                    margin-bottom: 10px; 
-                    background-color: rgba(255,255,255,0.05); 
-                    border-radius: 0 5px 5px 0;">
-                    <p style="margin:0; font-size: 0.9em; color: gray;">{model_name}</p>
-                    <p style="margin:0; font-size: 1.2em; font-weight: bold;">{dose:,.0f} IU</p>
-                </div>
-                """, 
-                unsafe_allow_html=True
-            )
+        if not results:
+            st.info("No models selected.")
+        else:
+            for model_name, dose, color in results:
+                st.markdown(
+                    f"""
+                    <div style="
+                        border-left: 5px solid {color}; 
+                        padding-left: 10px; 
+                        margin-bottom: 10px; 
+                        background-color: rgba(255,255,255,0.05); 
+                        border-radius: 0 5px 5px 0;">
+                        <p style="margin:0; font-size: 0.9em; color: gray;">{model_name}</p>
+                        <p style="margin:0; font-size: 1.2em; font-weight: bold;">{dose:,.0f} IU</p>
+                    </div>
+                    """, 
+                    unsafe_allow_html=True
+                )
 
 with tab_clinical:
     if k_table is None:
