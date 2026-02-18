@@ -406,7 +406,7 @@ pat_t_on = st.sidebar.number_input("Patient Time on CPB (min)", value=float(t_on
 # ==========================================
 # 3. TABS
 # ==========================================
-tab_compare, tab_clinical, tab_nomogram, tab_diagnostics = st.tabs(["Compare Models", "🚀 Decay Curves", "📐 Interactive Nomogram", "🔬 Diagnostics & PDF"])
+tab_compare, tab_clinical, tab_nomogram, tab_diagnostics = st.tabs(["🆚 Compare Models", "🚀 Decay Curves", "📐 Interactive Nomogram", "🔬 Diagnostics & PDF"])
 
 # Load Table for selected model
 k_table = load_k_table(model_choice)
