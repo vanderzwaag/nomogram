@@ -406,7 +406,7 @@ pat_t_on = st.sidebar.number_input("Patient Time on CPB (min)", value=float(t_on
 # ==========================================
 # 3. TABS
 # ==========================================
-tab_compare, tab_clinical, tab_nomogram, tab_diagnostics = st.tabs(["🆚 Compare Models", "🚀 Decay Curves", "📐 Interactive Nomogram", "🔬 Diagnostics & PDF"])
+tab_compare, tab_clinical, tab_topup, tab_nomogram, tab_diagnostics = st.tabs(["🆚 Compare Models", "🚀 Decay Curves", "Top-up Simulation", "📐 Interactive Nomogram", "🔬 Diagnostics & PDF"])
 
 # Load Table for selected model
 k_table = load_k_table(model_choice)
@@ -508,7 +508,7 @@ with tab_compare:
         
         st.pyplot(fig)
     
-    with col_comp_data:
+with col_comp_data:
         st.subheader("Remaining Heparin")
         st.caption(f"Calculated at End of CPB ({c_end_time:.0f} min)")
         
@@ -516,14 +516,14 @@ with tab_compare:
         
         # Color Map
         color_map = {
-            "Lanoiselee": "#1f77b4", # tab:blue
+            "Lanoiselee": "#1f77b4",
             "Delavenne": "purple",
             "Jia": "green",
-            "Meesters": "#d62728",   # tab:red
-            "PRODOSE": "#ff7f0e"     # tab:orange
+            "Meesters": "#d62728",
+            "PRODOSE": "#ff7f0e"
         }
 
-        # Visibility Map (Links model name to checkbox state)
+        # Visibility Map
         visibility_map = {
             "Lanoiselee": show_lan,
             "Delavenne": show_del,
@@ -533,10 +533,30 @@ with tab_compare:
         }
         
         for model in comp_models:
-            # Check if this model was selected via checkbox
             if visibility_map[model]:
                 rem_dose = get_reference_remaining(model, c_end_time, c_bolus_total, c_prime, c_ibw, c_t_to, c_t_on)
-                results.append((model, rem_dose, color_map[model]))
+                
+                cri_text = None
+                try:
+                    # We need the time array (t_mc) to find the correct index
+                    if model == "Lanoiselee":
+                        t_mc, lo, _, hi = get_lanoiselee_cri(c_bolus_total, [(c_t_to, c_prime)])
+                    elif model == "Delavenne":
+                        t_mc, lo, _, hi = get_delavenne_cri(c_bolus_total, [(c_t_to, c_prime)], c_ibw)
+                    elif model == "Jia":
+                        t_mc, lo, _, hi = get_jia_cri(c_bolus_total, [(c_t_to, c_prime)], c_ibw)
+                    else:
+                        t_mc = None
+        
+                    if t_mc is not None:
+                        # --- FIX: Find the index where t_mc is closest to c_end_time ---
+                        idx = np.abs(t_mc - c_end_time).argmin()
+                        cri_text = f"{lo[idx]:,.0f} to {hi[idx]:,.0f}"
+                        
+                except Exception:
+                    cri_text = "N/A"
+        
+                results.append((model, rem_dose, color_map[model], cri_text))
         
         # Sort by remaining dose
         results.sort(key=lambda x: x[1], reverse=True)
@@ -545,7 +565,10 @@ with tab_compare:
         if not results:
             st.info("No models selected.")
         else:
-            for model_name, dose, color in results:
+            for model_name, dose, color, cri in results:
+                # Build the CrI HTML string if data exists
+                cri_html = f'<p style="margin:0; font-size: 0.8em; color: #888;">95% CrI: {cri} IU</p>' if cri else ""
+                
                 st.markdown(
                     f"""
                     <div style="
@@ -556,12 +579,15 @@ with tab_compare:
                         border-radius: 0 5px 5px 0;">
                         <p style="margin:0; font-size: 0.9em; color: gray;">{model_name}</p>
                         <p style="margin:0; font-size: 1.2em; font-weight: bold;">{dose:,.0f} IU</p>
+                        {cri_html}
                     </div>
                     """, 
                     unsafe_allow_html=True
                 )
-
+                
 with tab_clinical:
+    pat_total_time = pat_t_to + pat_t_on
+
     if k_table is None:
         st.warning(f"Lookup table for {model_choice} not found. Please click 'Regenerate Lookup Tables' in sidebar.")
     
@@ -583,9 +609,9 @@ with tab_clinical:
         t_plot = np.linspace(0, 120, 200)
         pat_d0 = (pat_h_kg * pat_ibw) + pat_p_hep
         
-        # Simplified Model (Single Expo) trajectories using loaded K
+        # Simplified Model trajectories
         y_simp_mu = pat_d0 * np.exp(-k_mu * t_plot)
-        y_simp_hi = pat_d0 * np.exp(-k_lo * t_plot) # Note: Low k = High Residual
+        y_simp_hi = pat_d0 * np.exp(-k_lo * t_plot) 
         y_simp_lo = pat_d0 * np.exp(-k_hi * t_plot)
         
         # Reference Model trajectory
@@ -596,29 +622,33 @@ with tab_clinical:
         ax1.plot(t_plot, y_simp_mu, color='tab:blue', lw=1.5, label=f'Simplified (k={k_mu:.4f})')
         ax1.plot(t_plot, y_ref_pat, color='tab:orange', ls='--', lw=2.0, label=f'Reference ({model_choice})')
         
-        # --- Lanoiselee Reversal Threshold ---
+        # --- NEW: Initialize CrI storage for Results column ---
+        ref_cri = None
+
         if model_choice == "Lanoiselee":
             reversal_threshold = 0.625 * pat_d0
-            ax1.axhline(y=reversal_threshold, color='green', ls=':', lw=1.5, 
-                        label="0.625:1 ratio suggested by Lanoiselee et al.")
+            ax1.axhline(y=reversal_threshold, color='green', ls=':', lw=1.5, label="0.625:1 ratio")
 
             init_bolus = pat_ibw * pat_h_kg
             t_mc, lo, med, hi = get_lanoiselee_cri(init_bolus, [(pat_t_to, pat_p_hep)])
             ax1.fill_between(t_mc, lo, hi, color='orange', alpha=0.1, label='Lanoiselee 95% CrI')
+            idx = np.abs(t_mc - pat_total_time).argmin()
+            ref_cri = f"{lo[idx]:,.0f} to {hi[idx]:,.0f}" # Capture value at end
             
         elif model_choice == "Delavenne":
-        
             init_bolus = pat_ibw * pat_h_kg
-            
-            # Pass 'pat_ibw' (or actual weight) as the patient_weight argument
             t_mc, lo, med, hi = get_delavenne_cri(init_bolus, [(pat_t_to, pat_p_hep)], pat_ibw)
-            
             ax1.fill_between(t_mc, lo, hi, color='purple', alpha=0.1, label='Delavenne 95% CrI')
+            idx = np.abs(t_mc - pat_total_time).argmin()
+            ref_cri = f"{lo[idx]:,.0f} to {hi[idx]:,.0f}" # Capture value at end
+            
             
         elif model_choice == "Jia":
             init_bolus = pat_ibw * pat_h_kg
             t_mc, lo, med, hi = get_jia_cri(init_bolus, [(pat_t_to, pat_p_hep)], pat_ibw)
             ax1.fill_between(t_mc, lo, hi, color='green', alpha=0.1, label='Jia 95% CrI')
+            idx = np.abs(t_mc - pat_total_time).argmin()
+            ref_cri = f"{lo[idx]:,.0f} to {hi[idx]:,.0f}" # Capture value at end
 
         # Point at end of CPB
         end_time = pat_t_to + pat_t_on
@@ -634,16 +664,26 @@ with tab_clinical:
 
     with col2:
         st.subheader("Results")
-        # Calc final values
         pat_total_time = pat_t_to + pat_t_on
         res_simp = pat_d0 * np.exp(-k_mu * pat_total_time)
-        res_ref = ref_end # calculated above
+        # Simplified model also has a CrI based on k_lo and k_hi
+        res_simp_lo = pat_d0 * np.exp(-k_hi * pat_total_time)
+        res_simp_hi = pat_d0 * np.exp(-k_lo * pat_total_time)
+        
+        res_ref = ref_end
         
         diff = res_simp - res_ref
         pct_err = (diff / res_ref) * 100 if res_ref > 0 else 0
         
+        # Display Simplified Metric
         st.metric("Simplified Model Prediction", f"{res_simp:,.0f} IU")
+        st.caption(f"95% CrI: {res_simp_lo:,.0f} to {res_simp_hi:,.0f} IU")
+        
+        # Display Reference Metric
         st.metric(f"{model_choice} Prediction", f"{res_ref:,.0f} IU")
+        if ref_cri:
+            st.caption(f"95% CrI: {ref_cri} IU")
+        
         st.metric("Difference", f"{diff:+.0f} IU", f"{pct_err:.1f}%", delta_color="inverse")
         
         st.markdown(f"""
@@ -653,13 +693,105 @@ with tab_clinical:
         * Patient Total Load: {pat_d0:,.0f} IU
         """)
 
+# Assuming tab_topup is created via st.tabs(...)
+
+with tab_topup:
+    st.subheader("Dynamic Top-up Simulation (Nomogram Axis Reset)")
+    st.write("This tab validates resetting the time axis of the static nomogram by comparing it to the continuous superposition of the selected reference model.")
+
+    # UI Controls
+    col_param1, col_param2 = st.columns(2)
+    with col_param1:
+        t_topup = st.slider("Time of Top-up (minutes from initial dose)", min_value=30, max_value=180, value=60, step=5)
+    with col_param2:
+        bolus_val = st.number_input("Top-up Bolus (IU)", min_value=1000, max_value=10000, value=5000, step=1000)
+    
+    # 1. Fetch exact parameters from the current session state
+    ibw = st.session_state["ibw_base"]
+    h_base = st.session_state["h_base"]
+    initial_bolus = h_base * ibw
+    prime = st.session_state["p_base"]
+    t_to = st.session_state["t_to_base"]
+    t_on = st.session_state["t_on_base"]
+    model_choice = st.session_state.model_choice
+    
+    # 2. Extract the exact 'k' used for the simplified model in the rest of the app
+    k_table = load_k_table(model_choice)
+    k_stats = get_k_stats(h_base, ibw, t_to, t_on, prime, k_table)
+    k_mu = k_stats['mu']
+    
+    initial_total = initial_bolus + prime
+    
+    # 3. Time vectors
+    t_phase1 = np.linspace(0, t_topup, 50)
+    t_post = np.linspace(0, 120, 50) 
+    t_phase2 = t_topup + t_post 
+    
+    # --- SIMPLIFIED MODEL (Axis Reset Logic) ---
+    # Phase 1 decay (before top-up)
+    simp_phase1 = initial_total * np.exp(-k_mu * t_phase1)
+    
+    # Residual exactly at top-up
+    residual_at_topup = initial_total * math.exp(-k_mu * t_topup)
+    new_total_load = residual_at_topup + bolus_val
+    
+    # Phase 2 decay (time axis reset to 0 for t_post)
+    simp_phase2 = new_total_load * np.exp(-k_mu * t_post) 
+    
+    # --- REFERENCE MODEL (Superposition Logic) ---
+    # Phase 1
+    ref_phase1 = [get_reference_remaining(model_choice, t, initial_bolus, prime, ibw, t_to, t_on) for t in t_phase1]
+    
+    # Phase 2
+    ref_phase2 = []
+    for t_abs in t_phase2:
+        # Original dose continuing to decay naturally
+        orig_decay = get_reference_remaining(model_choice, t_abs, initial_bolus, prime, ibw, t_to, t_on)
+        
+        # Top-up dose decay (Given directly on CPB, so t_to=0, prime=0)
+        time_since_topup = t_abs - t_topup
+        topup_decay = get_reference_remaining(model_choice, time_since_topup, bolus_val, 0, ibw, 0, t_on)
+        
+        ref_phase2.append(orig_decay + topup_decay)
+
+    # 4. Plotting
+    fig_topup, ax = plt.subplots(figsize=(10, 5))
+    
+    # Simplified Model Curves
+    ax.plot(t_phase1, simp_phase1, 'b-', linewidth=2, label=f"Simplified (k={k_mu:.4f})")
+    ax.plot(t_phase2, simp_phase2, 'b--', linewidth=2, label="Simplified (Axis Reset)")
+    
+    # Reference Model Curves
+    ax.plot(t_phase1, ref_phase1, 'r-', linewidth=2, alpha=0.7, label=f"Reference: {model_choice}")
+    ax.plot(t_phase2, ref_phase2, 'r--', linewidth=2, alpha=0.7, label="Reference (Superposition)")
+    
+    # Annotations
+    ax.axvline(x=t_topup, color='gray', linestyle=':', label=f"Top-up ({bolus_val} IU)")
+    ax.annotate('', xy=(t_topup, new_total_load), xytext=(t_topup, residual_at_topup),
+                arrowprops=dict(arrowstyle="->", color='blue', lw=1.5))
+    
+    ax.set_xlabel("Total Elapsed Time (min)")
+    ax.set_ylabel("Remaining Heparin Load (IU)")
+    ax.set_title(f"Validation of Nomogram Axis-Reset post {bolus_val} IU Top-up")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    
+    st.pyplot(fig_topup)
+
+    # 5. Concordance Output
+    final_simp = simp_phase2[-1]
+    final_ref = ref_phase2[-1]
+    error_pct = abs(final_simp - final_ref) / final_ref * 100 if final_ref > 0 else 0
+    
+    st.info(f"**Concordance Check:** 120 minutes post-top-up, the simplified nomogram reset method differs from the **{model_choice}** continuous model by **{error_pct:.1f}%**.")
+        
 with tab_nomogram:
     st.subheader("Interactive Nomogram")
         
     col1, col2 = st.columns([1, 1])
         
     with col1:
-      
+        # Basic setup
         d0_baseline = (h_base * ibw_base) + p_base
         res_baseline = d0_baseline * np.exp(-k_mu * (t_to_base + t_on_base))
         
@@ -685,7 +817,7 @@ with tab_nomogram:
             draw_axis(xl, d0_min, d0_max, False, 'l') 
             draw_axis(xr, r_min, r_max, True, 'r')
     
-            # --- RESTORED TIME AXIS (MIDDLE) ---
+            # --- Middle Time Axis ---
             y_l_ref = m_modulus * (np.log(d0_baseline) - np.log(d0_min))
             y_r_0 = 10 - (m_modulus * (np.log(d0_baseline * np.exp(-k_mu * 0)) - np.log(r_min)))
             y_r_120 = 10 - (m_modulus * (np.log(d0_baseline * np.exp(-k_mu * 120)) - np.log(r_min)))
@@ -704,16 +836,69 @@ with tab_nomogram:
             pat_time = pat_t_to + pat_t_on
             y_r_mu_p = 10 - (m_modulus * (np.log(pat_d0 * np.exp(-k_mu * pat_time)) - np.log(r_min)))
                 
-            # Uncertainty fan on right axis
+            # --- 1. Simplified Model Uncertainty Fan ---
             y_r_hi_p = 10 - (m_modulus * (np.log(pat_d0 * np.exp(-k_lo * pat_time)) - np.log(r_min)))
             y_r_lo_p = 10 - (m_modulus * (np.log(pat_d0 * np.exp(-k_hi * pat_time)) - np.log(r_min)))
-            ax2.fill([xl, xr, xr], [y_l_pat, y_r_lo_p, y_r_hi_p], color='red', alpha=0.1)
+            ax2.fill([xl, xr, xr], [y_l_pat, y_r_lo_p, y_r_hi_p], color='tab:red', alpha=0.1, label="Simplified CrI")
             ax2.plot([xl, xr], [y_l_pat, y_r_mu_p], color='red', lw=1.2, zorder=5)
+            
+            # --- 2. Reference Model Uncertainty (Shaded Area on Axis) ---
+            # Re-calculating the raw numeric values for current patient
+            ref_lo, ref_hi = None, None
+            init_bolus = pat_ibw * pat_h_kg
+            try:
+                if model_choice == "Lanoiselee":
+                    _, lo, _, hi = get_lanoiselee_cri(init_bolus, [(pat_t_to, pat_p_hep)])
+                    idx = np.abs(t_mc - pat_total_time).argmin()
+                    ref_lo, ref_hi = lo[idx], hi[idx]
+                elif model_choice == "Delavenne":
+                    _, lo, _, hi = get_delavenne_cri(init_bolus, [(pat_t_to, pat_p_hep)], pat_ibw)
+                    idx = np.abs(t_mc - pat_total_time).argmin()
+                    ref_lo, ref_hi = lo[idx], hi[idx]
+                elif model_choice == "Jia":
+                    _, lo, _, hi = get_jia_cri(init_bolus, [(pat_t_to, pat_p_hep)], pat_ibw)
+                    ref_lo, ref_hi = lo[-1], hi[-1]
+            except:
+                pass
+
+# --- 2. Reference Model Uncertainty (Shaded Area on Axis) ---
+            # (Calculation of ref_lo, ref_hi and idx remains as before)
+            
+            if ref_lo is not None:
+                # Calculate raw Y coordinates
+                y_raw_lo = 10 - (m_modulus * (np.log(ref_lo) - np.log(r_min)))
+                y_raw_hi = 10 - (m_modulus * (np.log(ref_hi) - np.log(r_min)))
                 
+                # Clip the coordinates for the shaded fill area
+                y_fill_lo = np.clip(y_raw_lo, 0, 10)
+                y_fill_hi = np.clip(y_raw_hi, 0, 10)
+                
+                # Draw the shaded bar (clipped to axis limits)
+                ax2.fill_betweenx([y_fill_hi, y_fill_lo], xr+0.05, xr+0.18, 
+                                 color='orange', alpha=0.3, label=f'{model_choice} CrI')
+                
+                # Add arrows if the CrI goes beyond the scale
+                # Note: On this axis, y=10 is the bottom (lower dose) and y=0 is the top (higher dose)
+                arrow_props = dict(arrowstyle='->', color='orange', lw=1.5)
+                
+                # If HI bound (higher dose) is above the top of axis (y < 0)
+                if y_raw_hi < 0:
+                    ax2.annotate('', xy=(xr+0.115, 0), xytext=(xr+0.115, 0.5), arrowprops=arrow_props)
+                
+                # If LO bound (lower dose) is below the bottom of axis (y > 10)
+                if y_raw_lo > 10:
+                    ax2.annotate('', xy=(xr+0.115, 10), xytext=(xr+0.115, 9.5), arrowprops=arrow_props)
+
+                # Centered label
+                y_text = (y_fill_lo + y_fill_hi) / 2
+                ax2.text(xr+0.22, y_text, f"Ref CrI\n({model_choice})", 
+                         fontsize=7, color='orange', fontweight='bold', va='center')
+                         
             ax2.text(xl, 10.4, "Initial Dose", ha='center', fontsize=9, fontweight='bold')
             ax2.text(xr, 10.4, "Residual", ha='center', fontsize=9, fontweight='bold')
             ax2.axis('off')
             return fig2
+            
         st.pyplot(draw_nomo())
         
     with col2:
