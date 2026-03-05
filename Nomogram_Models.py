@@ -450,7 +450,11 @@ def add_footer_to_pdf(input_pdf, output_pdf, footer_text):
         packet = BytesIO()
         can = canvas.Canvas(packet, pagesize=A4)
         can.setFont("Helvetica", 8)
-        can.drawString(1 * cm, 0.5 * cm, footer_text)
+        lines = footer_text.split('\n')
+        y_position = 50 # Example starting Y coordinate near the bottom
+        for line in lines:
+            can.drawString(0, y_position, line) # c is your reportlab canvas
+            y_position -= 15 # move down for the next line
         can.save()
         packet.seek(0)
         overlay = PdfReader(packet).pages[0]
@@ -515,26 +519,44 @@ def plot_tornado(df):
     params = []
     low_vals = []
     high_vals = []
+    spreads = []
+
+    # 1. Extract values
     for param in df["Parameter"].unique():
         subset = df[df["Parameter"] == param]
         k_low = subset[subset["Direction"] == "low"]["k_best"].values[0]
         k_high = subset[subset["Direction"] == "high"]["k_best"].values[0]
+        
         params.append(param)
         low_vals.append(k_low)
         high_vals.append(k_high)
+        spreads.append(abs(k_high - k_low))
 
-    low_vals = np.array(low_vals)
-    high_vals = np.array(high_vals)
-    base = (low_vals + high_vals) / 2
-    half_range = np.abs(high_vals - low_vals) / 2
+    # 2. Bind into a DataFrame for guaranteed aligned sorting
+    plot_df = pd.DataFrame({
+        "Parameter": params,
+        "k_low": low_vals,
+        "k_high": high_vals,
+        "spread": spreads
+    })
 
+    # 3. Sort ascending (so the largest spread is plotted last, at the top)
+    plot_df = plot_df.sort_values(by="spread", ascending=True).reset_index(drop=True)
+
+    # 4. Plotting
     fig, ax = plt.subplots(figsize=(7, 5))
-    y_pos = np.arange(len(params))
-    ax.barh(y_pos, half_range*2, left=np.minimum(low_vals, high_vals), height=0.6, color="steelblue", alpha=0.7)
+    y_pos = np.arange(len(plot_df))
+    
+    widths = np.abs(plot_df["k_high"] - plot_df["k_low"])
+    lefts = np.minimum(plot_df["k_low"], plot_df["k_high"])
+    
+    ax.barh(y_pos, widths, left=lefts, height=0.6, color="steelblue", alpha=0.7)
+    
     ax.set_yticks(y_pos)
-    ax.set_yticklabels(params)
+    ax.set_yticklabels(plot_df["Parameter"])
     ax.set_xlabel("k value")
     ax.set_title("Tornado Plot")
+    
     return fig
 
 def clinical_summary(k_best, bias, loa_low, loa_high, ibw_mean, model_name):
@@ -638,52 +660,52 @@ def plot_sensitivity(df):
     return fig
 
 @st.cache_resource(show_spinner=False)
-def plot_tornado(df):
-    """
-    Creates a Tornado Diagram to visualize relative impact of parameters.
-    """
-    # Group by parameter to find range (High k - Low k)
-    params = []
-    low_vals = []
-    high_vals = []
-
-    for param in df["Parameter"].unique():
-        subset = df[df["Parameter"] == param]
-        # We assume the loop order (low then high) or filter explicitly
-        try:
-            k_low = subset[subset["Direction"] == "low"]["k_best"].values[0]
-            k_high = subset[subset["Direction"] == "high"]["k_best"].values[0]
-        except IndexError:
-            continue
-
-        params.append(param)
-        low_vals.append(k_low)
-        high_vals.append(k_high)
-
-    low_vals = np.array(low_vals)
-    high_vals = np.array(high_vals)
-    
-    # Calculate center and width for bars
-    # Note: Tornado plots usually center on the 'Base Case k', 
-    # but centering on the average of the range works for simple visual comparison.
-    base = (low_vals + high_vals) / 2
-    half_range = np.abs(high_vals - low_vals) / 2
-
-    # Create Plot
-    fig, ax = plt.subplots(figsize=(7, 5))
-    y_pos = np.arange(len(params))
-
-    # The bar starts at the minimum value and extends the full range
-    rects = ax.barh(y_pos, half_range * 2, left=np.minimum(low_vals, high_vals), 
-                    height=0.6, color="steelblue", alpha=0.7, align='center')
-
-    ax.set_yticks(y_pos)
-    ax.set_yticklabels(params)
-    ax.set_xlabel("Calibrated k value")
-    ax.set_title("Tornado Plot: Impact of Parameter Uncertainty")
-    
-    plt.tight_layout()
-    return fig
+# def plot_tornado(df):
+#     """
+#     Creates a Tornado Diagram to visualize relative impact of parameters.
+#     """
+#     # Group by parameter to find range (High k - Low k)
+#     params = []
+#     low_vals = []
+#     high_vals = []
+# 
+#     for param in df["Parameter"].unique():
+#         subset = df[df["Parameter"] == param]
+#         # We assume the loop order (low then high) or filter explicitly
+#         try:
+#             k_low = subset[subset["Direction"] == "low"]["k_best"].values[0]
+#             k_high = subset[subset["Direction"] == "high"]["k_best"].values[0]
+#         except IndexError:
+#             continue
+# 
+#         params.append(param)
+#         low_vals.append(k_low)
+#         high_vals.append(k_high)
+# 
+#     low_vals = np.array(low_vals)
+#     high_vals = np.array(high_vals)
+#     
+#     # Calculate center and width for bars
+#     # Note: Tornado plots usually center on the 'Base Case k', 
+#     # but centering on the average of the range works for simple visual comparison.
+#     base = (low_vals + high_vals) / 2
+#     half_range = np.abs(high_vals - low_vals) / 2
+# 
+#     # Create Plot
+#     fig, ax = plt.subplots(figsize=(7, 5))
+#     y_pos = np.arange(len(params))
+# 
+#     # The bar starts at the minimum value and extends the full range
+#     rects = ax.barh(y_pos, half_range * 2, left=np.minimum(low_vals, high_vals), 
+#                     height=0.6, color="steelblue", alpha=0.7, align='center')
+# 
+#     ax.set_yticks(y_pos)
+#     ax.set_yticklabels(params)
+#     ax.set_xlabel("Calibrated k value")
+#     ax.set_title("Tornado Plot: Impact of Parameter Uncertainty")
+#     
+#     plt.tight_layout()
+#     return fig
 
 # ==========================================
 # UPDATED MAIN RUNNER
@@ -747,7 +769,7 @@ def run_nomogram(initial_dose_per_kg, t_to_mean, prime_heparin,
     # 6. Generate PDF & Plots
     pdf_path_raw = build_nomogram(mean_k) # Uses Nomographer
     center_pdf_on_a4("heparin_dose_decay_nomogram.pdf", "nomogram_a4.pdf")
-    footer_text = f"Ref: {model_name}. k={mean_k:.5f}. {APP_VERSION}"
+    footer_text = f"Generated for parameters: Initial heparin: {initial_dose_per_kg}, heparin in prime: {prime_heparin},\ntime to CPB: {t_to_mean}±{t_to_sd}, time on CPB: {t_on_mean}±{t_on_sd}, IBW: {ibw_mean}±{ibw_sd}\nReference model: {model_name}. k={mean_k:.5f}. {APP_VERSION}"
     pdf_path = "nomogram_final.pdf"
     add_footer_to_pdf("nomogram_a4.pdf", pdf_path, footer_text)
 
