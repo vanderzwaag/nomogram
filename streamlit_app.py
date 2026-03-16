@@ -8,6 +8,17 @@ import itertools
 from Nomogram_Models import run_nomogram, prodose_dose, lanoiselee_dose, delavenne_dose, delavenne_response, jia_response, generate_v2_table_deterministic
 
 # ==========================================
+# LEGAL DISCLAIMER
+# ==========================================
+st.warning("""
+**⚠️ STRICTLY FOR RESEARCH AND EDUCATIONAL USE ONLY**
+
+This application is an experimental informatics pipeline and technical proof-of-concept. It is **NOT** a medical device, nor has it been cleared, approved, or evaluated by the U.S. Food and Drug Administration (FDA), the European Medicines Agency (EMA), or any other regulatory authority under the EU Medical Device Regulation (MDR) or equivalent frameworks. 
+
+The predictive models, nomograms, and calculations provided by this software are strictly for educational and research purposes. They must **never** be used for clinical decision-making, patient care, or to dictate drug dosages. The user assumes all liability and risk associated with the use of this software. By continuing to use this application, you acknowledge and agree to these terms.
+""")
+
+# ==========================================
 # 1. SETUP & UTILS
 # ==========================================
 st.set_page_config(layout="wide", page_title="Heparin Decay Dashboard")
@@ -88,6 +99,37 @@ def get_reference_remaining(model_name, t, bolus, prime, ibw, t_to, t_on):
             term3 = prime * math.exp(-k2 * t_on_curr)
             return term1 + term2 + term3
     
+    elif model_name == "PRODOSE-2":
+        # PRODOSE-2 trajectory logic (assumes 1500 mL prime, reinfusion = 1.0)
+        v_prime_mL = 1500.0
+        k1 = 0.2847
+        
+        k2_base = 0.693 / (52.44 + 0.2968 * (bolus / ibw))
+        ebv = ibw * 70  # Estimated Blood Volume
+        v_factor = ebv / (ebv + v_prime_mL)
+        k2_cpb = k2_base * v_factor
+        
+        if t <= t_to:
+            # Phase 1: Before CPB prime is added. Decay purely relies on time 't'
+            pool_fast = bolus * 0.10 * math.exp(-k1 * t)
+            pool_slow = bolus * 0.90 * math.exp(-k2_cpb * t)
+            return pool_fast + pool_slow
+            
+        else:
+            # Phase 2: On CPB. 
+            t_on_curr = t - t_to # Time elapsed SINCE the prime was added
+            
+            # Fast pool is unaffected by prime, decays for total time 't'
+            pool_fast = bolus * 0.10 * math.exp(-k1 * t)
+            
+            # Slow pool at the exact moment CPB starts
+            slow_at_cpb_start = bolus * 0.90 * math.exp(-k2_cpb * t_to)
+            
+            # Add the prime to the slow pool, then decay it for the time ON pump
+            pool_slow = (slow_at_cpb_start + prime) * math.exp(-k2_cpb * t_on_curr)
+            
+            return pool_fast + pool_slow
+    
     elif model_name == "Meesters":
         k2 = 0.693 / 250
         if t <= t_to:
@@ -126,14 +168,10 @@ def get_reference_remaining(model_name, t, bolus, prime, ibw, t_to, t_on):
         val_bolus = jia_response(bolus, t, ibw)
         val_prime = 0.0
         if t > t_to:
-            val_prime = delavenne_response(prime, t - t_to, ibw)
+            val_prime = jia_response(prime, t - t_to, ibw)
         return val_bolus + val_prime
       
     return 0.0
-
-def reset_to_defaults():
-    for key, val in DEFAULTS.items():
-        st.session_state[key] = val
 
 def lanoiselee_model(y, t, Cl, Vc, Vp, Q):
     AcH, ApH = y
@@ -358,7 +396,10 @@ def get_jia_cri(initial_bolus, additional_boluses, patient_weight, n_pat=250):
 # ==========================================
 st.sidebar.header("Configuration")
 
-st.sidebar.button("Reset to Defaults", on_click=reset_to_defaults)
+model_idx = 0 if st.session_state.model_choice == "PRODOSE" else 1
+model_choice = st.sidebar.selectbox("Reference Model", ["Delavenne", "Jia", "Lanoiselee", "Meesters", "PRODOSE", "PRODOSE-2"], 
+                                    index=model_idx, key="k_model")
+st.session_state.model_choice = model_choice
 
 st.sidebar.header("1. Institutional Baseline")
 ibw_base = st.sidebar.slider("Baseline IBW (kg)", 40, 120, step=5, 
@@ -381,12 +422,6 @@ t_on_base = st.sidebar.slider("Baseline Time on CPB (min)", 15, 120, step=5,
                               value=st.session_state["t_on_base"], key="s_ton")
 st.session_state["t_on_base"] = t_on_base
 
-# 5. Selectbox (Handled similarly)
-model_idx = 0 if st.session_state.model_choice == "PRODOSE" else 1
-model_choice = st.sidebar.selectbox("Reference Model", ["Delavenne", "Jia", "Lanoiselee", "Meesters", "PRODOSE"], 
-                                    index=model_idx, key="k_model")
-st.session_state.model_choice = model_choice
-
 with st.sidebar.expander("Simulation Settings"):
     st.caption("Standard Deviations for PDF/Diagnostics")
     ibw_sd = st.number_input("IBW SD (kg)", value=10.0)
@@ -406,7 +441,7 @@ pat_t_on = st.sidebar.number_input("Patient Time on CPB (min)", value=float(t_on
 # ==========================================
 # 3. TABS
 # ==========================================
-tab_compare, tab_clinical, tab_topup, tab_nomogram, tab_diagnostics = st.tabs(["🆚 Compare Models", "🚀 Decay Curves", "Top-up Simulation", "📐 Interactive Nomogram", "🔬 Diagnostics & PDF"])
+tab_compare, tab_clinical, tab_topup, tab_nomogram, tab_diagnostics = st.tabs(["🆚 Compare Models", "🚀 Decay Curves", "💉 Top-up Simulation", "📐 Interactive Nomogram", "🔬 Diagnostics & PDF"])
 
 # Load Table for selected model
 k_table = load_k_table(model_choice)
@@ -415,7 +450,7 @@ k_mu, k_lo, k_hi = k_stats['mu'], k_stats['lo'], k_stats['hi']
 
 with tab_compare:
     # Models to compare
-    comp_models = ["Lanoiselee", "Delavenne", "Jia", "Meesters", "PRODOSE"]
+    comp_models = ["Lanoiselee", "Delavenne", "Jia", "Meesters", "PRODOSE", "PRODOSE-2"]
     
     # Prepare data inputs based on sidebar "Plot My Patient" values
     c_ibw = pat_ibw
@@ -428,7 +463,7 @@ with tab_compare:
     
     # --- NEW: Model Selection Row ---
     st.markdown("##### Select Models to Display")
-    m_col1, m_col2, m_col3, m_col4, m_col5 = st.columns(5)
+    m_col1, m_col2, m_col3, m_col4, m_col5, m_col6 = st.columns(6)
     
     with m_col1:
         show_lan = st.checkbox("Lanoiselee", value=True)
@@ -440,6 +475,8 @@ with tab_compare:
         show_mee = st.checkbox("Meesters", value=True)
     with m_col5:
         show_pro = st.checkbox("PRODOSE", value=True)
+    with m_col6:
+        show_pro2 = st.checkbox("PRODOSE-2", value=True)
 
     # 2. Credible Intervals Toggles row (Existing)
     st.markdown("##### 95% Credible Intervals (CrI) Display")
@@ -498,6 +535,11 @@ with tab_compare:
         if show_pro:
             y_pro = [get_reference_remaining("PRODOSE", t, c_bolus_total, c_prime, c_ibw, c_t_to, c_t_on) for t in t_plot]
             ax.plot(t_plot, y_pro, color='tab:orange', lw=2, linestyle='--', label='PRODOSE')
+            
+        # --- PRODOSE-2 ---
+        if show_pro2:
+            y_pro = [get_reference_remaining("PRODOSE-2", t, c_bolus_total, c_prime, c_ibw, c_t_to, c_t_on) for t in t_plot]
+            ax.plot(t_plot, y_pro, color='black', lw=2, linestyle='--', label='PRODOSE-2')
     
         # Plot Visuals
         ax.axvline(x=c_end_time, color='black', linestyle=':', label="End of CPB")
@@ -520,7 +562,8 @@ with col_comp_data:
             "Delavenne": "purple",
             "Jia": "green",
             "Meesters": "#d62728",
-            "PRODOSE": "#ff7f0e"
+            "PRODOSE": "#ff7f0e",
+            "PRODOSE-2": "black"
         }
 
         # Visibility Map
@@ -529,7 +572,8 @@ with col_comp_data:
             "Delavenne": show_del,
             "Jia": show_jia,
             "Meesters": show_mee,
-            "PRODOSE": show_pro
+            "PRODOSE": show_pro,
+            "PRODOSE-2": show_pro2
         }
         
         for model in comp_models:
@@ -693,8 +737,6 @@ with tab_clinical:
         * Patient Total Load: {pat_d0:,.0f} IU
         """)
 
-# Assuming tab_topup is created via st.tabs(...)
-
 with tab_topup:
     st.subheader("Dynamic Top-up Simulation (Nomogram Axis Reset)")
     st.write("This tab validates resetting the time axis of the static nomogram by comparing it to the continuous superposition of the selected reference model.")
@@ -738,20 +780,32 @@ with tab_topup:
     # Phase 2 decay (time axis reset to 0 for t_post)
     simp_phase2 = new_total_load * np.exp(-k_mu * t_post) 
     
-    # --- REFERENCE MODEL (Superposition Logic) ---
-    # Phase 1
+    # --- REFERENCE MODEL (Analytical Superposition Logic) ---
+    # Phase 1: Normal decay of initial bolus + prime
     ref_phase1 = [get_reference_remaining(model_choice, t, initial_bolus, prime, ibw, t_to, t_on) for t in t_phase1]
     
-    # Phase 2
+    # Phase 2: Superposition of original doses + top-up
     ref_phase2 = []
     for t_abs in t_phase2:
-        # Original dose continuing to decay naturally
+        # 1. Original dose continuing to decay naturally
         orig_decay = get_reference_remaining(model_choice, t_abs, initial_bolus, prime, ibw, t_to, t_on)
         
-        # Top-up dose decay (Given directly on CPB, so t_to=0, prime=0)
+        # 2. Top-up dose decay
         time_since_topup = t_abs - t_topup
-        topup_decay = get_reference_remaining(model_choice, time_since_topup, bolus_val, 0, ibw, 0, t_on)
         
+        if model_choice == "PRODOSE-2":
+            # PRODOSE-2 Top-up: Decays entirely in the slow compartment using k2_cpb
+            k2_base = 0.693 / (52.44 + 0.2968 * (initial_bolus / ibw))
+            v_prime_mL = st.session_state.get("v_prime_base", 1500.0)
+            ebv = ibw * 70
+            k2_cpb = k2_base * (ebv / (ebv + v_prime_mL))
+            
+            topup_decay = bolus_val * math.exp(-k2_cpb * time_since_topup)
+        else:
+            # Standard superposition for PRODOSE, Meesters, Lanoiselee, Delavenne, Jia
+            # This cleanly passes 'time_since_topup' as 't' into your _response formulas
+            topup_decay = get_reference_remaining(model_choice, time_since_topup, bolus_val, 0, ibw, 0, t_on)
+            
         ref_phase2.append(orig_decay + topup_decay)
 
     # 4. Plotting
@@ -763,7 +817,7 @@ with tab_topup:
     
     # Reference Model Curves
     ax.plot(t_phase1, ref_phase1, 'r-', linewidth=2, alpha=0.7, label=f"Reference: {model_choice}")
-    ax.plot(t_phase2, ref_phase2, 'r--', linewidth=2, alpha=0.7, label="Reference (Superposition)")
+    ax.plot(t_phase2, ref_phase2, 'r--', linewidth=2, alpha=0.7, label="Reference (Analytical Superposition)")
     
     # Annotations
     ax.axvline(x=t_topup, color='gray', linestyle=':', label=f"Top-up ({bolus_val} IU)")
@@ -784,7 +838,7 @@ with tab_topup:
     error_pct = abs(final_simp - final_ref) / final_ref * 100 if final_ref > 0 else 0
     
     st.info(f"**Concordance Check:** 120 minutes post-top-up, the simplified nomogram reset method differs from the **{model_choice}** continuous model by **{error_pct:.1f}%**.")
-        
+
 with tab_nomogram:
     st.subheader("Interactive Nomogram")
         

@@ -30,6 +30,37 @@ def prodose_dose(heparin_bolus, heparin_prime, ibw, time_to_cpb, time_on_cpb):
     term3 = heparin_prime * math.exp(-k2 * time_on_cpb)
     return term1 + term2 + term3
   
+def prodose2_dose(heparin_bolus, heparin_prime, ibw, time_to_cpb, time_on_cpb):
+
+    reinfusion = 1.0
+    k1 = 0.2847
+    v_prime_mL = 1500
+    
+    # Calculate base and CPB-adjusted elimination constants
+    k2_base = 0.693 / (52.44 + 0.2968 * (heparin_bolus / ibw))
+    ebv = ibw * 70  # Estimated Blood Volume
+    v_factor = ebv / (ebv + v_prime_mL)
+    k2_cpb = k2_base * v_factor
+    
+    # Initial dose at t = 0
+    pool_fast = heparin_bolus * 0.10
+    pool_slow = heparin_bolus * 0.90
+    
+    # Phase 1: Time to CPB
+    pool_fast = pool_fast * math.exp(-k1 * time_to_cpb)
+    pool_slow = pool_slow * math.exp(-k2_cpb * time_to_cpb) + heparin_prime
+    
+    # Phase 2: Time on CPB
+    pool_fast = pool_fast * math.exp(-k1 * time_on_cpb)
+    pool_slow = pool_slow * math.exp(-k2_cpb * time_on_cpb)
+    
+    # Reinfusion calculation
+    patient_mass = pool_slow * v_factor
+    circuit_mass = pool_slow * (1 - v_factor)
+    reinfused_mass = circuit_mass * reinfusion
+    
+    return patient_mass + reinfused_mass + pool_fast
+  
 def meesters_dose(heparin_bolus, heparin_prime, ibw, time_to_cpb, time_on_cpb):
     """
     Meesters formula.
@@ -220,6 +251,8 @@ def jia_dose(heparin_bolus, heparin_prime, ibw, time_to_cpb, time_on_cpb):
 def get_reference_dose(model_name, h_bolus, h_prime, ibw, t_to, t_on):
     if model_name.lower() == "prodose":
         return prodose_dose(h_bolus, h_prime, ibw, t_to, t_on)
+    elif model_name.lower() == "prodose-2":
+        return prodose2_dose(h_bolus, h_prime, ibw, t_to, t_on)
     elif model_name.lower() == "lanoiselee":
         return lanoiselee_dose(h_bolus, h_prime, ibw, t_to, t_on)
     elif model_name.lower() == "meesters":
@@ -288,7 +321,7 @@ def find_best_k(initial_dose_per_kg, prime_heparin, ibw_mean, ibw_sd,
 @st.cache_data(show_spinner=False)
 def bootstrap_k_distribution(initial_dose_per_kg, prime_heparin, ibw_mean, ibw_sd,
                              t_to_mean, t_to_sd, t_on_mean, t_on_sd,
-                             model_name, n_boot=200, n_sim=1000):
+                             model_name, n_boot=1000, n_sim=1000):
 
     k_values = []
     for _ in range(n_boot):
@@ -320,72 +353,6 @@ def bootstrap_k_distribution(initial_dose_per_kg, prime_heparin, ibw_mean, ibw_s
         k_values.append(result.x)
 
     return np.array(k_values)
-
-# @st.cache_data(show_spinner=False)  
-# def bootstrap_k_distribution(initial_dose_per_kg,
-#                              prime_heparin,
-#                              ibw_mean,
-#                              ibw_sd,
-#                              t_to_mean,
-#                              t_to_sd,
-#                              t_on_mean,
-#                              t_on_sd,
-#                              model_name,
-#                              n_boot=200,
-#                              n_sim=1000):
-# 
-#     k_values = []
-# 
-#     for _ in range(n_boot):
-#         # Resample simulation inputs
-#         ibw = np.random.normal(loc=80.0, scale=10.0, size=n_sim)
-#         heparin_bolus = initial_dose_per_kg * ibw
-# 
-#         time_to_cpb_samples = np.random.normal(
-#             loc=t_to_mean,
-#             scale=t_to_sd,
-#             size=n_sim
-#         )
-# 
-#         time_on_cpb_samples = np.random.normal(
-#             loc=t_on_mean,
-#            scale=t_on_sd,
-#             size=n_sim
-#         )
-# 
-# 
-#         time_to_cpb_samples = np.clip(time_to_cpb_samples, 0, None)
-#         time_on_cpb_samples = np.clip(time_on_cpb_samples, 0, None)
-# 
-#         # Compute PRODOSE reference
-#         ref_doses = [
-#             prodose_dose(h, prime_heparin, w, t_to, t_on)
-#             for h, w, t_to, t_on in zip(
-#                 heparin_bolus,
-#                 ibw,
-#                 time_to_cpb_samples,
-#                 time_on_cpb_samples
-#             )
-#         ]
-# 
-#         # Objective for optimizer
-#         def objective(k):
-#             test_doses = [
-#                 simplified_model_dose(h, prime_heparin, w, t_to, t_on, k)
-#                 for h, w, t_to, t_on in zip(
-#                     heparin_bolus,
-#                     ibw,
-#                     time_to_cpb_samples,
-#                     time_on_cpb_samples
-#                 )
-#             ]
-#             return bland_altman_score(ref_doses, test_doses)
-# 
-#         # Optimize k
-#         result = minimize_scalar(objective, bounds=(0.001, 0.02), method='bounded')
-#         k_values.append(result.x)
-# 
-#     return np.array(k_values)
 
 def summarize_k_distribution(k_values):
     mean_k = np.mean(k_values)
@@ -659,54 +626,6 @@ def plot_sensitivity(df):
     plt.tight_layout()
     return fig
 
-@st.cache_resource(show_spinner=False)
-# def plot_tornado(df):
-#     """
-#     Creates a Tornado Diagram to visualize relative impact of parameters.
-#     """
-#     # Group by parameter to find range (High k - Low k)
-#     params = []
-#     low_vals = []
-#     high_vals = []
-# 
-#     for param in df["Parameter"].unique():
-#         subset = df[df["Parameter"] == param]
-#         # We assume the loop order (low then high) or filter explicitly
-#         try:
-#             k_low = subset[subset["Direction"] == "low"]["k_best"].values[0]
-#             k_high = subset[subset["Direction"] == "high"]["k_best"].values[0]
-#         except IndexError:
-#             continue
-# 
-#         params.append(param)
-#         low_vals.append(k_low)
-#         high_vals.append(k_high)
-# 
-#     low_vals = np.array(low_vals)
-#     high_vals = np.array(high_vals)
-#     
-#     # Calculate center and width for bars
-#     # Note: Tornado plots usually center on the 'Base Case k', 
-#     # but centering on the average of the range works for simple visual comparison.
-#     base = (low_vals + high_vals) / 2
-#     half_range = np.abs(high_vals - low_vals) / 2
-# 
-#     # Create Plot
-#     fig, ax = plt.subplots(figsize=(7, 5))
-#     y_pos = np.arange(len(params))
-# 
-#     # The bar starts at the minimum value and extends the full range
-#     rects = ax.barh(y_pos, half_range * 2, left=np.minimum(low_vals, high_vals), 
-#                     height=0.6, color="steelblue", alpha=0.7, align='center')
-# 
-#     ax.set_yticks(y_pos)
-#     ax.set_yticklabels(params)
-#     ax.set_xlabel("Calibrated k value")
-#     ax.set_title("Tornado Plot: Impact of Parameter Uncertainty")
-#     
-#     plt.tight_layout()
-#     return fig
-
 # ==========================================
 # UPDATED MAIN RUNNER
 # ==========================================
@@ -724,7 +643,7 @@ def run_nomogram(initial_dose_per_kg, t_to_mean, prime_heparin,
                                       t_to_mean, t_to_sd, t_on_mean, t_on_sd, model_name)
     mean_k, ci_low, ci_high = summarize_k_distribution(k_boot)
 
-    # 3. Sensitivity Analysis (RESTORED)
+    # 3. Sensitivity Analysis
     sens_df = sensitivity_analysis(
         initial_dose_per_kg, prime_heparin, 
         ibw_mean, ibw_sd, 
@@ -800,13 +719,11 @@ time_on_grid  = [30, 60, 90, 120]
 prime_grid    = [0, 5000, 10000]
 
 def generate_v2_table_deterministic():
-    """
-    Generates lookup tables for BOTH models.
-    """
+
     combos = list(itertools.product(heparin_grid, ibw_grid, time_to_grid, time_on_grid, prime_grid))
     total = len(combos)
     
-    models = ["delavenne", "jia", "prodose", "lanoiselee", "meesters"]
+    models = ["delavenne", "jia", "prodose", "prodose-2", "lanoiselee", "meesters"]
     
     main_prog = st.progress(0.0)
     status_text = st.empty()
