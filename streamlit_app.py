@@ -437,8 +437,10 @@ def get_jia_cri(initial_bolus, additional_boluses, patient_weight, n_pat=250):
 # ==========================================
 st.sidebar.header("Configuration")
 
+## PRODOSE-2 deleted for now
+
 model_idx = 0 if st.session_state.model_choice == "PRODOSE" else 1
-model_choice = st.sidebar.selectbox("Reference Model", ["Delavenne", "Jia", "Lanoiselee", "Meesters", "PRODOSE", "PRODOSE-2"], 
+model_choice = st.sidebar.selectbox("Reference Model", ["Delavenne", "Jia", "Lanoiselee", "Meesters", "PRODOSE"], 
                                     index=model_idx, key="k_model")
 st.session_state.model_choice = model_choice
 
@@ -490,8 +492,8 @@ k_stats = get_k_stats(h_base, ibw_base, t_to_base, t_on_base, p_base, k_table)
 k_mu, k_lo, k_hi = k_stats['mu'], k_stats['lo'], k_stats['hi']
 
 with tab_compare:
-    # Models to compare
-    comp_models = ["Lanoiselee", "Delavenne", "Jia", "Meesters", "PRODOSE", "PRODOSE-2"]
+    # Models to compare, PRODOSE-2 deleted for now
+    comp_models = ["Lanoiselee", "Delavenne", "Jia", "Meesters", "PRODOSE"]
     
     # Prepare data inputs based on sidebar "Plot My Patient" values
     c_ibw = pat_ibw
@@ -516,8 +518,8 @@ with tab_compare:
         show_mee = st.checkbox("Meesters", value=True)
     with m_col5:
         show_pro = st.checkbox("PRODOSE", value=True)
-    with m_col6:
-        show_pro2 = st.checkbox("PRODOSE-2", value=True)
+#    with m_col6:
+#        show_pro2 = st.checkbox("PRODOSE-2", value=True)
 
     # 2. Credible Intervals Toggles row (Existing)
     st.markdown("##### 95% Credible Intervals (CrI) Display")
