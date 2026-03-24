@@ -580,9 +580,9 @@ with tab_compare:
             ax.plot(t_plot, y_pro, color='tab:orange', lw=2, linestyle='--', label='PRODOSE')
             
         # --- PRODOSE-2 ---
-        if show_pro2:
-            y_pro = [get_reference_remaining("PRODOSE-2", t, c_bolus_total, c_prime, c_ibw, c_t_to, c_t_on) for t in t_plot]
-            ax.plot(t_plot, y_pro, color='black', lw=2, linestyle='--', label='PRODOSE-2')
+#        if show_pro2:
+#            y_pro = [get_reference_remaining("PRODOSE-2", t, c_bolus_total, c_prime, c_ibw, c_t_to, c_t_on) for t in t_plot]
+#            ax.plot(t_plot, y_pro, color='black', lw=2, linestyle='--', label='PRODOSE-2')
     
         # Plot Visuals
         ax.axvline(x=c_end_time, color='black', linestyle=':', label="End of CPB")
