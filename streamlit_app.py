@@ -616,7 +616,7 @@ with col_comp_data:
             "Jia": show_jia,
             "Meesters": show_mee,
             "PRODOSE": show_pro,
-            "PRODOSE-2": show_pro2
+#            "PRODOSE-2": show_pro2
         }
         
         for model in comp_models:
