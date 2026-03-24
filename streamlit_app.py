@@ -19,6 +19,47 @@ The predictive models, nomograms, and calculations provided by this software are
 """)
 
 # ==========================================
+# PEER REVIEW LOGIN GATE
+# ==========================================
+def check_password():
+    """Returns `True` if the user had the correct password."""
+
+    def password_entered():
+        """Checks whether a password entered by the user is correct."""
+        # Use st.secrets to securely check the password
+        if st.session_state["password"] == st.secrets["peer_review_password"]:
+            st.session_state["password_correct"] = True
+            del st.session_state["password"]  # Don't store password in session state
+        else:
+            st.session_state["password_correct"] = False
+
+    if "password_correct" not in st.session_state:
+        # First run, show input for password.
+        st.text_input(
+            "🔒 Peer Review Access: Please enter the password provided in the manuscript.", 
+            type="password", 
+            on_change=password_entered, 
+            key="password"
+        )
+        return False
+    elif not st.session_state["password_correct"]:
+        # Password incorrect, show input + error.
+        st.text_input(
+            "🔒 Peer Review Access: Please enter the password provided in the manuscript.", 
+            type="password", 
+            on_change=password_entered, 
+            key="password"
+        )
+        st.error("😕 Password incorrect")
+        return False
+    else:
+        # Password correct.
+        return True
+
+if not check_password():
+    st.stop()
+
+# ==========================================
 # 1. SETUP & UTILS
 # ==========================================
 st.set_page_config(layout="wide", page_title="Heparin Decay Dashboard")
