@@ -50,7 +50,7 @@ def check_password():
             on_change=password_entered, 
             key="password"
         )
-        st.error("😕 Password incorrect")
+        st.error("Password incorrect")
         return False
     else:
         # Password correct.
@@ -484,7 +484,7 @@ pat_t_on = st.sidebar.number_input("Patient Time on CPB (min)", value=float(t_on
 # ==========================================
 # 3. TABS
 # ==========================================
-tab_compare, tab_clinical, tab_topup, tab_nomogram, tab_diagnostics = st.tabs(["🆚 Compare Models", "🚀 Decay Curves", "💉 Top-up Simulation", "📐 Interactive Nomogram", "🔬 Diagnostics & PDF"])
+tab_compare, tab_clinical, tab_topup, tab_nomogram, tab_diagnostics = st.tabs(["Compare Models", "Decay Curves", "Top-up Simulation", "Interactive Nomogram", "Diagnostics & PDF"])
 
 # Load Table for selected model
 k_table = load_k_table(model_choice)
