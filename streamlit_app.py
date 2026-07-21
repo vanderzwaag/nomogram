@@ -438,7 +438,7 @@ def get_jia_cri(initial_bolus, additional_boluses, patient_weight, n_pat=250):
 st.sidebar.header("Configuration")
 
 model_idx = 0 if st.session_state.model_choice == "PRODOSE" else 1
-model_choice = st.sidebar.selectbox("Reference Model", ["Delavenne", "Jia", "Lanoiselee", "Meesters", "PRODOSE"], 
+model_choice = st.sidebar.selectbox("Reference Model", ["Delavenne", "Jia", "Lanoiselee", "Meesters", "PRODOSE", "PRODOSE-2"], 
                                     index=model_idx, key="k_model")
 st.session_state.model_choice = model_choice
 
