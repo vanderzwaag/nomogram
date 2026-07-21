@@ -437,8 +437,6 @@ def get_jia_cri(initial_bolus, additional_boluses, patient_weight, n_pat=250):
 # ==========================================
 st.sidebar.header("Configuration")
 
-## PRODOSE-2 deleted for now
-
 model_idx = 0 if st.session_state.model_choice == "PRODOSE" else 1
 model_choice = st.sidebar.selectbox("Reference Model", ["Delavenne", "Jia", "Lanoiselee", "Meesters", "PRODOSE"], 
                                     index=model_idx, key="k_model")
@@ -492,8 +490,8 @@ k_stats = get_k_stats(h_base, ibw_base, t_to_base, t_on_base, p_base, k_table)
 k_mu, k_lo, k_hi = k_stats['mu'], k_stats['lo'], k_stats['hi']
 
 with tab_compare:
-    # Models to compare, PRODOSE-2 deleted for now
-    comp_models = ["Lanoiselee", "Delavenne", "Jia", "Meesters", "PRODOSE"]
+    # Models to compare
+    comp_models = ["Lanoiselee", "Delavenne", "Jia", "Meesters", "PRODOSE", "PRODOSE-2"]
     
     # Prepare data inputs based on sidebar "Plot My Patient" values
     c_ibw = pat_ibw
@@ -518,8 +516,8 @@ with tab_compare:
         show_mee = st.checkbox("Meesters", value=True)
     with m_col5:
         show_pro = st.checkbox("PRODOSE", value=True)
-#    with m_col6:
-#        show_pro2 = st.checkbox("PRODOSE-2", value=True)
+    with m_col6:
+        show_pro2 = st.checkbox("PRODOSE-2", value=True)
 
     # 2. Credible Intervals Toggles row (Existing)
     st.markdown("##### 95% Credible Intervals (CrI) Display")
@@ -580,9 +578,9 @@ with tab_compare:
             ax.plot(t_plot, y_pro, color='tab:orange', lw=2, linestyle='--', label='PRODOSE')
             
         # --- PRODOSE-2 ---
-#        if show_pro2:
-#            y_pro = [get_reference_remaining("PRODOSE-2", t, c_bolus_total, c_prime, c_ibw, c_t_to, c_t_on) for t in t_plot]
-#            ax.plot(t_plot, y_pro, color='black', lw=2, linestyle='--', label='PRODOSE-2')
+        if show_pro2:
+            y_pro = [get_reference_remaining("PRODOSE-2", t, c_bolus_total, c_prime, c_ibw, c_t_to, c_t_on) for t in t_plot]
+            ax.plot(t_plot, y_pro, color='black', lw=2, linestyle='--', label='PRODOSE-2')
     
         # Plot Visuals
         ax.axvline(x=c_end_time, color='black', linestyle=':', label="End of CPB")
@@ -616,7 +614,7 @@ with col_comp_data:
             "Jia": show_jia,
             "Meesters": show_mee,
             "PRODOSE": show_pro,
-#            "PRODOSE-2": show_pro2
+            "PRODOSE-2": show_pro2
         }
         
         for model in comp_models:
