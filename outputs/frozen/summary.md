@@ -1,7 +1,7 @@
 # Frozen analysis run
 
-- Generated: 2026-09-12T19:23:22.603402+00:00
-- Commit: `daca688-dirty`  **working tree dirty -- commit before quoting these numbers**
+- Generated: 2026-09-12T19:35:14.203768+00:00
+- Commit: `e7a4fc6-dirty`  **working tree dirty -- commit before quoting these numbers**
 - Seed: `20260912`
 - Cohort: grid_snapped_70_15_60: 400 IU/kg, prime 5000 IU, IBW 70+/-10 kg, time to CPB 15+/-3.75 min, time on CPB 60+/-15 min [adult]
 - Sign convention: Difference = reference model - nomogram (positive = nomogram under-estimates)
@@ -73,7 +73,7 @@ The run used `reversal_endpoint`: One point per patient: residual heparin at the
 
 ## Implementation verification (EB-6)
 
-Implementation verification only. Each model is checked against the equations and parameters of its source publication: the closed-form solutions are confirmed to solve the corresponding differential equations numerically, and to satisfy the identities those equations imply (initial condition, area under the curve equal to dose x Vc / Cl, terminal slope equal to -beta, dose linearity, and the prime-timing convention). The derived pharmacokinetic constants each source's parameters imply are tabulated so a reader can compare them with the source directly. No participant-level data from any source study is held by the authors, so the models are not re-fitted and their predictions are not compared with observed measurements; no such external or predictive validation is claimed. What is demonstrated is that the implementation faithfully reproduces the published model, not that the published model is correct.
+Each model is checked against the equations and parameters of its source publication: the closed-form solutions are confirmed to solve the corresponding differential equations numerically, and to satisfy the identities those equations imply (initial condition, area under the curve equal to dose x Vc / Cl, terminal slope equal to -beta, dose linearity, and the prime-timing convention). The derived pharmacokinetic constants each source's parameters imply are tabulated so a reader can compare them with the source directly. For Delavenne the implementation additionally reproduces the published Figure 3 simulation -- a 70 kg patient given either 350 IU/kg plus hourly 5,000 IU boluses, or 300 IU/kg followed by a 55 IU/kg/h infusion -- to within the precision with which that figure can be read (worst deviation 3%). That figure contains no observed data, so it is a pure model prediction and needs no participant-level data to reproduce. The Lanoiselee paper's corresponding diagnostic is a prediction-corrected visual predictive check, which cannot serve as a benchmark: its ordinate carries prediction-corrected observations rather than model predictions, and its bands can only be regenerated from the original dataset and its full design. No participant-level data from any source study is held by the authors, so the models are not re-fitted and their predictions are not compared with observed measurements; no such external or predictive validation is claimed. What is demonstrated is that the implementation faithfully reproduces the published model, not that the published model is correct.
 
 Derived constants at 70 kg, for comparison against each source publication:
 
@@ -89,7 +89,20 @@ Derived constants at 70 kg, for comparison against each source publication:
 | PRODOSE | 10% | 10.0 | 155 | quoted at 400 IU/kg; depends on dose per kg |
 | PRODOSE-2 | 10% | 2.4 | 171 | quoted at 400 IU/kg; depends on dose per kg |
 
-25 automatic implementation checks, all passing. No source publication prints a model-derived value in a form that can be checked against directly; the derived constants above serve that purpose instead.
+25 automatic implementation checks, all passing.
+
+Reproduction of a simulation published in a source (Delavenne Figure 3, 70 kg patient). The figure contains no observed data, so it is a pure model prediction and needs no participant-level data to reproduce; the tolerance reflects the precision with which the figure can be read.
+
+| Published value | Expected (read off) | Reproduced | Deviation |
+|---|---|---|---|
+| Panel C, peak anti-Xa immediately after the 350 IU/kg bolus | 7.80 anti-Xa IU/mL | 7.90 | 1.3% |
+| Panel C, trough before the first hourly 5,000 IU top-up | 3.70 anti-Xa IU/mL | 3.79 | 2.4% |
+| Panel C, peak immediately after the first hourly top-up | 5.20 anti-Xa IU/mL | 5.36 | 3.0% |
+| Panel A, peak anti-Xa immediately after the 300 IU/kg bolus | 6.80 anti-Xa IU/mL | 6.77 | 0.4% |
+| Panel A, anti-Xa plateau under the 55 IU/kg/h infusion at 2 h | 4.00 anti-Xa IU/mL | 4.04 | 0.9% |
+| Panel A, anti-Xa at the end of the 6 h infusion | 4.30 anti-Xa IU/mL | 4.28 | 0.4% |
+
+The Lanoiselee paper's corresponding diagnostic is a prediction-corrected visual predictive check, which cannot serve as a benchmark: its ordinate carries prediction-corrected observations rather than model predictions, and its bands can only be regenerated from the original dataset and its full design.
 
 ## Two intervals on k, which must not be conflated (EB-2)
 

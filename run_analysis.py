@@ -646,13 +646,24 @@ def _write_summary(outdir, args, spec, k_table, agr, obj, sens, modes, ptim,
         L.append(f"| {r['model']} | {r['fast_pool_fraction']:.0%} | "
                  f"{r['fast_half_life_min']:.1f} | {r['slow_half_life_min']:.0f} | "
                  f"{r['slow_half_life_note']} |")
-    n_checks = len(B.SOURCE_CHECKS)
-    L.append(f"\n{len(internal_checks)} automatic implementation checks, all passing. "
-             + (f"{n_checks} printed-value check(s) against the sources."
-                if n_checks else
-                "No source publication prints a model-derived value in a form that "
-                "can be checked against directly; the derived constants above serve "
-                "that purpose instead."))
+    L.append(f"\n{len(internal_checks)} automatic implementation checks, all passing.\n")
+    checks = B.source_check_report()
+    if not checks.empty:
+        L.append("Reproduction of a simulation published in a source "
+                 "(Delavenne Figure 3, 70 kg patient). The figure contains no "
+                 "observed data, so it is a pure model prediction and needs no "
+                 "participant-level data to reproduce; the tolerance reflects the "
+                 "precision with which the figure can be read.\n")
+        L.append("| Published value | Expected (read off) | Reproduced | Deviation |")
+        L.append("|---|---|---|---|")
+        for _, r in checks.iterrows():
+            L.append(f"| {r['description']} | {r['expected']:.2f} {r['units']} | "
+                     f"{r['observed']:.2f} | {r['pct_error']:.1f}% |")
+        L.append("\nThe Lanoiselee paper's corresponding diagnostic is a "
+                 "prediction-corrected visual predictive check, which cannot serve "
+                 "as a benchmark: its ordinate carries prediction-corrected "
+                 "observations rather than model predictions, and its bands can only "
+                 "be regenerated from the original dataset and its full design.")
     L.append("")
 
     L.append("## Two intervals on k, which must not be conflated (EB-2)\n")

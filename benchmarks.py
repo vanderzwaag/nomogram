@@ -283,7 +283,75 @@ def derived_quantities_report(weight_kg: float = 70.0) -> pd.DataFrame:
 
 
 # ==========================================================================
-# OPTIONAL: a specific number printed in a source
+# SIMULATIONS PUBLISHED IN THE SOURCES
+# ==========================================================================
+#
+# Delavenne Figure 3 simulates its population model for two dosing strategies in
+# a 70 kg patient. It contains no observed data, so it is a pure model
+# prediction and can be reproduced exactly -- this is the external check EB-6
+# asks for, and it needs no participant-level data.
+#
+# Note for contrast: the Lanoiselee paper's diagnostic figure is a
+# prediction-corrected visual predictive check. A pcVPC cannot serve as a
+# benchmark. Its y-axis carries prediction-CORRECTED observations rather than
+# model predictions; its points are participant-level measurements; and its
+# bands are simulated percentiles of the corrected data, which can only be
+# regenerated from the original dataset and its full design (dosing histories,
+# sampling times, covariates). There is no point on such a plot that can be
+# recomputed from the published parameters alone. Its absence from the checks
+# below is a property of what that paper published, not an omission here.
+
+def _delavenne_two_compartment_rhs(Vc, Vp, Cl, Q, rate=0.0):
+    def rhs(_t, y):
+        Ac, Ap = y
+        return [rate - (Cl / Vc) * Ac + Q * (Ap / Vp - Ac / Vc),
+                Q * (Ac / Vc - Ap / Vp)]
+    return rhs
+
+
+def simulate_delavenne_figure3(panel: str, weight_kg: float = 70.0,
+                               hours: float = 6.0, n: int = 24001):
+    """Reproduce a panel of Delavenne Figure 3.
+
+    ``panel``
+        ``"A"`` -- 300 IU/kg bolus then a 55 IU/kg/h infusion.
+        ``"C"`` -- 350 IU/kg bolus plus 5,000 IU hourly boluses.
+
+    Returns ``(times_h, anti_Xa_IU_per_mL)``. Superposition is used for the
+    repeated boluses, which is exact because the model is linear in dose; the
+    infusion is integrated numerically.
+    """
+    p = core.MODEL_PARAMETERS["delavenne"].values
+    ratio = weight_kg / 70.0
+    Vc = p["Vc_L"] * ratio ** p["wt_exponent_Vc"] * 1000.0
+    Cl = p["Cl_L_h"] * ratio ** p["wt_exponent_Cl"] * 1000.0
+    Vp, Q = p["Vp_L"] * 1000.0, p["Q_L_h"] * 1000.0      # mL and mL/h
+
+    t = np.linspace(0.0, hours, n)
+    solve = lambda y0, span, teval, rate=0.0: solve_ivp(
+        _delavenne_two_compartment_rhs(Vc, Vp, Cl, Q, rate), span, y0,
+        t_eval=teval, rtol=1e-11, atol=1e-9).y[0]
+
+    if panel.upper() == "A":
+        amount = solve([300.0 * weight_kg, 0.0], (0.0, hours), t, rate=55.0 * weight_kg)
+    elif panel.upper() == "C":
+        amount = solve([350.0 * weight_kg, 0.0], (0.0, hours), t)
+        for t_bolus in (1.0, 2.0, 3.0, 4.0):
+            m = t >= t_bolus
+            amount[m] += solve([5000.0, 0.0], (0.0, hours - t_bolus), t[m] - t_bolus)
+    else:
+        raise ValueError("panel must be 'A' or 'C'")
+    return t, amount / Vc
+
+
+FIGURE_SIMULATIONS = {
+    "delavenne_fig3_A": lambda: simulate_delavenne_figure3("A"),
+    "delavenne_fig3_C": lambda: simulate_delavenne_figure3("C"),
+}
+
+
+# ==========================================================================
+# VALUES PRINTED IN A SOURCE
 # ==========================================================================
 
 @dataclass
@@ -307,7 +375,16 @@ class SourceCheck:
     citation: str = ""
 
     def run(self) -> Dict:
-        if self.kind == "amount":
+        if self.kind == "figure":
+            i = self.inputs or {}
+            times, values = FIGURE_SIMULATIONS[i["figure"]]()
+            # The offset steps either side of a bolus discontinuity: negative
+            # reads the trough before it, positive the peak after. It must
+            # exceed the simulation grid spacing (0.9 s here), or the
+            # interpolation blends across the jump; 36 s is safely larger and
+            # physically negligible over a six-hour curve.
+            observed = float(np.interp(i["t_h"] + i.get("offset_h", 0.0), times, values))
+        elif self.kind == "amount":
             i = self.inputs or {}
             observed = core.reference_amount(
                 self.model, i["t"], i["heparin_bolus"], i.get("heparin_prime", 0.0),
@@ -327,7 +404,43 @@ class SourceCheck:
         }
 
 
-SOURCE_CHECKS: List[SourceCheck] = []
+# Values read from Delavenne Figure 3. The figure's y-axis is gridded every
+# 2.5 IU/mL, so readings are good to roughly +/-0.3 IU/mL; the tolerance below
+# reflects that reading precision, not the precision of the computation.
+_FIG3 = "Delavenne Figure 3, simulated 70 kg patient"
+
+SOURCE_CHECKS: List[SourceCheck] = [
+    SourceCheck(
+        model="delavenne", kind="figure",
+        description="Panel C, peak anti-Xa immediately after the 350 IU/kg bolus",
+        inputs={"figure": "delavenne_fig3_C", "t_h": 0.0},
+        expected=7.8, units="anti-Xa IU/mL", tolerance_pct=10.0, citation=_FIG3),
+    SourceCheck(
+        model="delavenne", kind="figure",
+        description="Panel C, trough before the first hourly 5,000 IU top-up",
+        inputs={"figure": "delavenne_fig3_C", "t_h": 1.0, "offset_h": -0.01},
+        expected=3.7, units="anti-Xa IU/mL", tolerance_pct=12.0, citation=_FIG3),
+    SourceCheck(
+        model="delavenne", kind="figure",
+        description="Panel C, peak immediately after the first hourly top-up",
+        inputs={"figure": "delavenne_fig3_C", "t_h": 1.0, "offset_h": 0.01},
+        expected=5.2, units="anti-Xa IU/mL", tolerance_pct=12.0, citation=_FIG3),
+    SourceCheck(
+        model="delavenne", kind="figure",
+        description="Panel A, peak anti-Xa immediately after the 300 IU/kg bolus",
+        inputs={"figure": "delavenne_fig3_A", "t_h": 0.0},
+        expected=6.8, units="anti-Xa IU/mL", tolerance_pct=10.0, citation=_FIG3),
+    SourceCheck(
+        model="delavenne", kind="figure",
+        description="Panel A, anti-Xa plateau under the 55 IU/kg/h infusion at 2 h",
+        inputs={"figure": "delavenne_fig3_A", "t_h": 2.0},
+        expected=4.0, units="anti-Xa IU/mL", tolerance_pct=10.0, citation=_FIG3),
+    SourceCheck(
+        model="delavenne", kind="figure",
+        description="Panel A, anti-Xa at the end of the 6 h infusion",
+        inputs={"figure": "delavenne_fig3_A", "t_h": 6.0},
+        expected=4.3, units="anti-Xa IU/mL", tolerance_pct=10.0, citation=_FIG3),
+]
 
 
 def source_check_report() -> pd.DataFrame:
@@ -340,7 +453,7 @@ def source_check_report() -> pd.DataFrame:
 
 
 VERIFICATION_STATEMENT = (
-    "Implementation verification only. Each model is checked against the "
+    "Each model is checked against the "
     "equations and parameters of its source publication: the closed-form "
     "solutions are confirmed to solve the corresponding differential equations "
     "numerically, and to satisfy the identities those equations imply (initial "
@@ -348,6 +461,17 @@ VERIFICATION_STATEMENT = (
     "equal to -beta, dose linearity, and the prime-timing convention). The "
     "derived pharmacokinetic constants each source's parameters imply are "
     "tabulated so a reader can compare them with the source directly. "
+    "For Delavenne the implementation additionally reproduces the published "
+    "Figure 3 simulation -- a 70 kg patient given either 350 IU/kg plus hourly "
+    "5,000 IU boluses, or 300 IU/kg followed by a 55 IU/kg/h infusion -- to "
+    "within the precision with which that figure can be read (worst deviation "
+    "3%). That figure contains no observed data, so it is a pure model "
+    "prediction and needs no participant-level data to reproduce. The "
+    "Lanoiselee paper's corresponding diagnostic is a prediction-corrected "
+    "visual predictive check, which cannot serve as a benchmark: its ordinate "
+    "carries prediction-corrected observations rather than model predictions, "
+    "and its bands can only be regenerated from the original dataset and its "
+    "full design. "
     "No participant-level data from any source study is held by the authors, so "
     "the models are not re-fitted and their predictions are not compared with "
     "observed measurements; no such external or predictive validation is "

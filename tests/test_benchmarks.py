@@ -1,5 +1,6 @@
 """Implementation verification (EB-6)."""
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -70,15 +71,42 @@ def test_jia_derived_constants_do_not_scale_with_weight():
             B.derived_quantities("jia", 115.0)[field], rel=1e-12)
 
 
-def test_source_checks_are_optional_and_pass_when_supplied():
-    """An empty SOURCE_CHECKS list is a fact about the publications, not a gap:
-    no participant-level data is held for any source study, so nothing is
-    re-fitted and no predictive check is possible or claimed."""
+def test_published_figure_is_reproduced():
+    """Delavenne Figure 3 simulates its population model for two dosing
+    strategies in a 70 kg patient. It contains no observed data, so it is a pure
+    model prediction and can be reproduced from the published parameters alone --
+    the external check EB-6 asks for, needing no participant-level data."""
     report = B.source_check_report()
-    if report.empty:
-        assert list(report.columns)  # the schema exists for when one is added
-    else:
-        assert (report["status"] == "PASS").all(), report[report["status"] != "PASS"]
+    assert not report.empty
+    failed = report[report["status"] != "PASS"]
+    assert failed.empty, failed.to_string()
+    assert (report["model"] == "delavenne").all()
+
+
+def test_figure3_panel_a_reaches_the_expected_infusion_plateau():
+    """A 55 IU/kg/h infusion must approach R/Cl, from below, over six hours."""
+    p = core.MODEL_PARAMETERS["delavenne"].values
+    steady_state = (55.0 * 70.0) / (p["Cl_L_h"] * 1000.0)
+    t, conc = B.simulate_delavenne_figure3("A")
+    assert conc[-1] < steady_state
+    assert conc[-1] > 0.9 * steady_state
+    # Monotonically rising once the bolus has distributed.
+    late = conc[t > 1.5]
+    assert np.all(np.diff(late) > -1e-9)
+
+
+def test_figure3_panel_c_accumulates_across_hourly_boluses():
+    t, conc = B.simulate_delavenne_figure3("C")
+    troughs = [float(np.interp(tb - 0.01, t, conc)) for tb in (1, 2, 3, 4)]
+    assert troughs == sorted(troughs), "hourly top-ups must accumulate"
+    # The initial peak is dose / Vc exactly.
+    p = core.MODEL_PARAMETERS["delavenne"].values
+    assert conc[0] == pytest.approx(350 * 70 / (p["Vc_L"] * 1000.0), rel=1e-6)
+
+
+def test_figure3_simulation_rejects_an_unknown_panel():
+    with pytest.raises(ValueError):
+        B.simulate_delavenne_figure3("B")
 
 
 def test_source_check_machinery_works_if_a_value_is_added():

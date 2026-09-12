@@ -1,0 +1,7 @@
+model,description,citation,units,expected,observed,pct_error,tolerance_pct,status
+delavenne,"Panel C, peak anti-Xa immediately after the 350 IU/kg bolus","Delavenne Figure 3, simulated 70 kg patient",anti-Xa IU/mL,7.8,7.903225806451613,1.3234077750206816,10.0,PASS
+delavenne,"Panel C, trough before the first hourly 5,000 IU top-up","Delavenne Figure 3, simulated 70 kg patient",anti-Xa IU/mL,3.7,3.789053720236165,2.4068573036801286,12.0,PASS
+delavenne,"Panel C, peak immediately after the first hourly top-up","Delavenne Figure 3, simulated 70 kg patient",anti-Xa IU/mL,5.2,5.356006657548552,3.000128029779849,12.0,PASS
+delavenne,"Panel A, peak anti-Xa immediately after the 300 IU/kg bolus","Delavenne Figure 3, simulated 70 kg patient",anti-Xa IU/mL,6.8,6.774193548387097,0.37950664136621837,10.0,PASS
+delavenne,"Panel A, anti-Xa plateau under the 55 IU/kg/h infusion at 2 h","Delavenne Figure 3, simulated 70 kg patient",anti-Xa IU/mL,4.0,4.035807189708116,0.8951797427029007,10.0,PASS
+delavenne,"Panel A, anti-Xa at the end of the 6 h infusion","Delavenne Figure 3, simulated 70 kg patient",anti-Xa IU/mL,4.3,4.282711863046808,0.40204969658585227,10.0,PASS
