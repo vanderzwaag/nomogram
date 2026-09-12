@@ -1,7 +1,7 @@
 # Frozen analysis run
 
-- Generated: 2026-09-12T16:57:32.359490+00:00
-- Commit: `def13e5-dirty`  **working tree dirty -- commit before quoting these numbers**
+- Generated: 2026-09-12T18:53:39.608586+00:00
+- Commit: `fa47130-dirty`  **working tree dirty -- commit before quoting these numbers**
 - Seed: `20260912`
 - Cohort: grid_snapped_70_15_60: 400 IU/kg, prime 5000 IU, IBW 70+/-10 kg, time to CPB 15+/-3.75 min, time on CPB 60+/-15 min [adult]
 - Sign convention: Difference = reference model - nomogram (positive = nomogram under-estimates)
@@ -15,7 +15,7 @@
 | Model | Population | k (/min) | MC sampling interval | Apparent t1/2 (min) |
 |---|---|---|---|---|
 | Delavenne | adult | 0.01046 | 0.01035 to 0.01057 | 66 |
-| Jia | paediatric | 0.00716 | 0.00716 to 0.00717 | 97 |
+| Jia | adult | 0.00715 | 0.00715 to 0.00716 | 97 |
 | Lanoiselee | adult | 0.00703 | 0.00703 to 0.00703 | 99 |
 | Meesters | adult | 0.00386 | 0.00384 to 0.00387 | 180 |
 | PRODOSE | adult | 0.00550 | 0.00548 to 0.00551 | 126 |
@@ -28,7 +28,7 @@ The interval is a Monte Carlo sampling-precision interval. It does **not** quant
 | Model | Bias (IU) | 95% LoA (IU) | MAPE (%) | Max abs error (%) | Prop-bias slope | p | Within threshold (%) |
 |---|---|---|---|---|---|---|---|
 | Delavenne | -12.84 | -3714.2 to +3688.6 | 10.33 | 48.1 | -0.1093 | 2e-07 | 40.3 |
-| Jia | +1.13 | -53.7 to +56.0 | 0.88 | 5.5 | -0.0024 | 0.007 | 100.0 |
+| Jia | +3.99 | -200.6 to +208.5 | 0.44 | 2.1 | +0.0008 | 0.43 | 100.0 |
 | Lanoiselee | +4.80 | -176.4 to +186.0 | 0.38 | 2.0 | -0.0085 | 3e-21 | 100.0 |
 | Meesters | +9.99 | -806.1 to +826.1 | 1.35 | 4.7 | -0.0706 | 5e-77 | 98.2 |
 | PRODOSE | +9.59 | -696.6 to +715.8 | 1.32 | 4.8 | -0.0813 | 2.8e-147 | 99.3 |
@@ -77,27 +77,27 @@ The sampling-precision interval repeats the simulation with fresh cohorts drawn 
 
 | Model | k | Sampling-precision interval | Parameter-uncertainty interval | Width ratio | Source |
 |---|---|---|---|---|---|
-| Delavenne | 0.01046 | 0.01035 to 0.01057 | 0.00828 to 0.01296 | 22x wider | iiv |
-| Jia | 0.00716 | 0.00716 to 0.00717 | 0.00465 to 0.01021 | 379x wider | iiv |
-| Lanoiselee | 0.00703 | 0.00703 to 0.00703 | 0.00514 to 0.00913 | 483x wider | iiv |
-| Meesters | 0.00386 | 0.00384 to 0.00387 | not propagated | -- | Meesters is a closed-form expression published without parameter uncertainty; no interval can be propagated for it |
-| PRODOSE | 0.00550 | 0.00548 to 0.00551 | not propagated | -- | PRODOSE is a closed-form expression published without parameter uncertainty; no interval can be propagated for it |
-| PRODOSE-2 | 0.00419 | 0.00418 to 0.00421 | not propagated | -- | PRODOSE-2 is a closed-form expression published without parameter uncertainty; no interval can be propagated for it |
+| Delavenne | 0.01046 | 0.01035 to 0.01057 | 0.00923 to 0.01165 | 11x wider | published %RSE |
+| Jia | 0.00715 | 0.00715 to 0.00716 | 0.00549 to 0.00883 | 345x wider | published bootstrap 95% CI |
+| Lanoiselee | 0.00703 | 0.00703 to 0.00703 | 0.00626 to 0.00777 | 183x wider | published %RSE |
+| Meesters | 0.00386 | 0.00384 to 0.00387 | not propagated | -- | closed-form expression; none published |
+| PRODOSE | 0.00550 | 0.00548 to 0.00551 | not propagated | -- | closed-form expression; none published |
+| PRODOSE-2 | 0.00419 | 0.00418 to 0.00421 | not propagated | -- | closed-form expression; none published |
 
-**Caveat.** No %RSE has yet been transcribed from the source publications, so interindividual variability was substituted. IIV describes spread between patients, not uncertainty in the published estimate, so the parameter-uncertainty interval above is an over-estimate and must be described as such until the published RSEs are supplied.
+Every interval above is propagated from uncertainty the source publications actually report: the asymptotic %RSE for Lanoiselee and Delavenne, and the non-parametric bootstrap interval for Jia, which publishes one. For Delavenne the draw includes the weight exponent on clearance (0.767, 29% RSE); because that covariate is centred on 70 kg its contribution is zero at the canonical cohort's IBW and reaches about 25% on clearance at the ends of the weight grid, so it moves the boundary and transportability results rather than this table.
 
 ## Coverage of the full input range and its boundaries (EB-4)
 
 | Model | Evaluation | Nodes | Mean abs error (%) | Max abs error (%) | Worst node |
 |---|---|---|---|---|---|
 | delavenne | full_range | 2304 | 24.35 | 67.4 | 600 IU/kg, 115 kg, prime 10000, 35+120 min |
-| jia | full_range | 675 | 2.45 | 11.9 | 300 IU/kg, 3 kg, prime 2500, 25+30 min |
+| jia | full_range | 2304 | 1.99 | 11.5 | 250 IU/kg, 40 kg, prime 10000, 35+30 min |
 | lanoiselee | full_range | 2304 | 1.86 | 11.4 | 250 IU/kg, 40 kg, prime 10000, 35+30 min |
 | meesters | full_range | 2304 | 3.90 | 15.6 | 600 IU/kg, 115 kg, prime 10000, 35+120 min |
 | prodose | full_range | 2304 | 8.79 | 29.7 | 600 IU/kg, 115 kg, prime 10000, 35+120 min |
 | prodose-2 | full_range | 2304 | 6.33 | 25.6 | 600 IU/kg, 115 kg, prime 10000, 35+120 min |
 | delavenne | boundary | 32 | 32.87 | 67.4 | 600 IU/kg, 115 kg, prime 10000, 35+120 min |
-| jia | boundary | 32 | 3.00 | 11.9 | 300 IU/kg, 3 kg, prime 2500, 25+30 min |
+| jia | boundary | 32 | 2.75 | 11.5 | 250 IU/kg, 40 kg, prime 10000, 35+30 min |
 | lanoiselee | boundary | 32 | 2.30 | 11.4 | 250 IU/kg, 40 kg, prime 10000, 35+30 min |
 | meesters | boundary | 32 | 5.27 | 15.6 | 600 IU/kg, 115 kg, prime 10000, 35+120 min |
 | prodose | boundary | 32 | 14.63 | 29.7 | 600 IU/kg, 115 kg, prime 10000, 35+120 min |
@@ -112,25 +112,23 @@ The sampling-precision interval repeats the simulation with fresh cohorts drawn 
 | meesters | 18 | 6.51 | 16.0 | 3482 | 3 x 10000 IU at 45/90/135 min |
 | prodose | 18 | 5.91 | 15.2 | 2217 | 3 x 10000 IU at 45/90/135 min |
 | lanoiselee | 18 | 1.33 | 6.6 | 524 | 10000 IU at 30 min |
-| jia | 18 | 1.40 | 2.7 | 458 | 3 x 10000 IU at 45/90/135 min |
+| jia | 18 | 1.56 | 3.0 | 495 | 3 x 10000 IU at 45/90/135 min |
 
 ## Transportability to shifted institutions (EB-4)
 
-Mean absolute percentage error when the canonically calibrated k is applied unchanged to a shifted population. Adult models are not run in paediatric populations, or the paediatric model in adult ones, so those cells are marked n/a rather than pooled (EB-4).
+Mean absolute percentage error when the canonically calibrated k is applied unchanged to a shifted population. Adult models are not run All six models are adult and are evaluated in the same populations; the small_bodied_adults row matches the body size the Jia model was derived in (EB-4, R1 p11 L46).
 
 | Institution | delavenne | jia | lanoiselee | meesters | prodose | prodose-2 |
 |---|---|---|---|---|---|---|
-| heavier_population | 12.34 | n/a | 0.47 | 1.36 | 1.34 | 2.19 |
-| high_dose | 9.63 | n/a | 0.71 | 1.53 | 8.30 | 5.50 |
-| infant | n/a | 0.91 | n/a | n/a | n/a | n/a |
-| lighter_population | 14.51 | n/a | 0.55 | 1.41 | 1.44 | 2.51 |
-| long_bypass | 30.94 | n/a | 0.70 | 5.31 | 5.08 | 5.58 |
-| low_dose_no_prime | 9.98 | n/a | 1.72 | 2.41 | 12.14 | 7.38 |
-| neonatal | n/a | 0.79 | n/a | n/a | n/a | n/a |
-| older_child | n/a | 0.82 | n/a | n/a | n/a | n/a |
-| short_bypass | 17.00 | n/a | 0.44 | 2.33 | 2.14 | 2.67 |
-| slow_start | 15.77 | n/a | 2.51 | 3.23 | 3.75 | 3.57 |
-| wide_case_mix | 21.92 | n/a | 1.24 | 3.54 | 3.55 | 4.05 |
+| heavier_population | 12.34 | 0.53 | 0.47 | 1.36 | 1.34 | 2.19 |
+| high_dose | 9.63 | 0.73 | 0.71 | 1.53 | 8.30 | 5.50 |
+| lighter_population | 14.51 | 0.57 | 0.55 | 1.41 | 1.44 | 2.51 |
+| long_bypass | 30.94 | 1.08 | 0.70 | 5.31 | 5.08 | 5.58 |
+| low_dose_no_prime | 9.98 | 1.81 | 1.72 | 2.41 | 12.14 | 7.38 |
+| short_bypass | 17.00 | 0.60 | 0.44 | 2.33 | 2.14 | 2.67 |
+| slow_start | 15.77 | 2.19 | 2.51 | 3.23 | 3.75 | 3.57 |
+| small_bodied_adults | 12.70 | 0.52 | 0.49 | 1.38 | 1.39 | 2.21 |
+| wide_case_mix | 21.92 | 1.10 | 1.24 | 3.54 | 3.55 | 4.05 |
 
 ## Most influential inputs, +/-20% (EB-8)
 
@@ -158,7 +156,6 @@ Reading the residual load off the nomogram requires no calculation; converting i
 
 ## Outstanding author decisions
 
-- **EB-2** -- Transcribe the published %RSE for these parameters, or state that the parameter-uncertainty interval could not be propagated
 - **EB-6** -- Supply the expected values for the per-source benchmark checks
-- **EB-4** -- Confirm the paediatric parameter space for Jia
+- **EB-4 / R1 p11 L46** -- Correct the manuscript's description of the Jia model
 - **EB-1** -- State the assumption under which central-compartment amount maps to a protamine dose

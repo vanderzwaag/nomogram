@@ -55,7 +55,6 @@ STREAM = {
     "prime_timing": 7,
     "institutions": 8,
     "correlated": 9,
-    "paediatric": 10,
     "loa_weight": 11,
     "evaluation_mode": 12,
 }
@@ -102,14 +101,12 @@ def run(args) -> Path:
     outdir.mkdir(parents=True, exist_ok=True)
     seed = args.seed
     models = list(core.MODEL_NAMES)
-    adult_models = [m for m in models if m not in core.PAEDIATRIC_MODELS]
 
     spec = ps.CANONICAL_COHORTS[args.cohort]
     calib_kwargs = dict(
         evaluation_mode=args.evaluation_mode,
         n_timepoints=args.n_timepoints,
         prime_timing=args.prime_timing,
-        jia_allometric=args.jia_allometric,
     )
 
     def write(name: str, df: pd.DataFrame) -> None:
@@ -134,9 +131,7 @@ def run(args) -> Path:
     k_rows, k_values = [], {}
     mc_draws = []
     for model in models:
-        model_spec = (ps.CANONICAL_COHORTS["paediatric"]
-                      if model in core.PAEDIATRIC_MODELS and args.paediatric_jia
-                      else spec)
+        model_spec = spec
         mc = cal.monte_carlo_precision(
             model_spec, model, seed=seed * 10 + STREAM["monte_carlo"],
             n_replicates=args.n_replicates, n_sim=args.n_sim, **calib_kwargs)
@@ -193,14 +188,11 @@ def run(args) -> Path:
     print("\n[2] Agreement on a fresh internal sample (EB-1, EB-3)")
     agreement_rows, strata_frames = [], []
     for model in models:
-        model_spec = (ps.CANONICAL_COHORTS["paediatric"]
-                      if model in core.PAEDIATRIC_MODELS and args.paediatric_jia
-                      else spec)
+        model_spec = spec
         rng = np.random.default_rng(seed * 10 + STREAM["test_cohort"])
         cohort = cal.sample_cohort(model_spec, args.n_test, rng)
         times = cal.evaluation_times(cohort, "reversal_endpoint")
-        ref = cal.reference_values(cohort, model, times,
-                                   jia_allometric=args.jia_allometric).ravel()
+        ref = cal.reference_values(cohort, model, times).ravel()
         nom = cal.nomogram_values(cohort, times, k_values[model],
                                   args.prime_timing).ravel()
         summary, strata = A.full_agreement_report(cohort, ref, nom,
@@ -261,8 +253,7 @@ def run(args) -> Path:
     modes = pd.concat([
         cal.evaluation_mode_comparison(spec, m, seed=seed * 10 + STREAM["evaluation_mode"],
                                        n_sim=args.n_sim, n_timepoints=args.n_timepoints,
-                                       prime_timing=args.prime_timing,
-                                       jia_allometric=args.jia_allometric)
+                                       prime_timing=args.prime_timing)
         for m in models], ignore_index=True)
     write("07_calibration_endpoint_comparison.csv", modes)
 
@@ -270,8 +261,7 @@ def run(args) -> Path:
         cal.prime_timing_sensitivity(spec, m, seed=seed * 10 + STREAM["prime_timing"],
                                      n_sim=args.n_sim,
                                      evaluation_mode=args.evaluation_mode,
-                                     n_timepoints=args.n_timepoints,
-                                     jia_allometric=args.jia_allometric)
+                                     n_timepoints=args.n_timepoints)
         for m in models], ignore_index=True)
     write("08_prime_timing_sensitivity.csv", ptim)
     biggest = ptim.loc[ptim["pct_change_vs_lumped"].abs().idxmax()]
@@ -288,6 +278,8 @@ def run(args) -> Path:
             allow_iiv_proxy=args.allow_iiv_proxy, **calib_kwargs)
         row = {"model": model, "available": rep.available,
                "uncertainty_source": rep.source, "note": rep.reason}
+        if rep.provenance:
+            row.update({f"basis_{k}": v for k, v in rep.provenance.items()})
         if rep.available:
             row.update(cal.summarise_k(rep.draws["k"]))
             pu_draws.append(rep.draws.assign(model=model))
@@ -308,12 +300,10 @@ def run(args) -> Path:
     for label, builder in (("full_range", ps.full_range_cohort),
                            ("boundary", ps.boundary_cohort)):
         for model in models:
-            population = ("paediatric" if model in core.PAEDIATRIC_MODELS
-                          and args.paediatric_jia else "adult")
+            population = "adult"
             grid = builder(population)
             times = cal.evaluation_times(grid, "reversal_endpoint")
-            ref = cal.reference_values(grid, model, times,
-                                       jia_allometric=args.jia_allometric).ravel()
+            ref = cal.reference_values(grid, model, times).ravel()
             nom = cal.nomogram_values(grid, times, k_values[model],
                                       args.prime_timing).ravel()
             rel = A.relative_errors(ref, nom)
@@ -345,14 +335,12 @@ def run(args) -> Path:
     print("\n[8] Transportability to shifted simulated institutions (EB-4)")
     inst_rows = []
     for model in models:
-        population = ("paediatric" if model in core.PAEDIATRIC_MODELS
-                      and args.paediatric_jia else "adult")
+        population = "adult"
         for name, shifted in ps.institutions_for(population).items():
             rng = np.random.default_rng(seed * 10 + STREAM["institutions"])
             cohort = cal.sample_cohort(shifted, args.n_test, rng)
             times = cal.evaluation_times(cohort, "reversal_endpoint")
-            ref = cal.reference_values(cohort, model, times,
-                                       jia_allometric=args.jia_allometric).ravel()
+            ref = cal.reference_values(cohort, model, times).ravel()
             # Transported k: calibrated at the canonical cohort, applied here.
             nom_transported = cal.nomogram_values(cohort, times, k_values[model],
                                                   args.prime_timing).ravel()
@@ -391,7 +379,6 @@ def run(args) -> Path:
         time_to_cpb=spec.t_to_mean,
         horizon_min=args.topup_horizon,
         prime_timing=args.prime_timing,
-        jia_allometric=args.jia_allometric,
         threshold_iu=args.threshold_iu,
     )
     write("12_topup_grid.csv", grid)
@@ -408,8 +395,7 @@ def run(args) -> Path:
             rng = np.random.default_rng(seed * 10 + STREAM["correlated"])
             cohort = cal.sample_correlated_cohort(spec, args.n_test, rng, correlation=rho)
             times = cal.evaluation_times(cohort, "reversal_endpoint")
-            ref = cal.reference_values(cohort, model, times,
-                                       jia_allometric=args.jia_allometric).ravel()
+            ref = cal.reference_values(cohort, model, times).ravel()
             nom = cal.nomogram_values(cohort, times, k_values[model],
                                       args.prime_timing).ravel()
             ba, rel = A.bland_altman(ref, nom), A.relative_errors(ref, nom)
@@ -435,8 +421,7 @@ def run(args) -> Path:
                 "nomogram_residual_iu": core.simplified_amount(
                     t, bolus, spec.prime_heparin, k, spec.t_to_mean, args.prime_timing),
                 "reference_residual_iu": core.reference_amount(
-                    model, t, bolus, spec.prime_heparin, spec.ibw_mean, spec.t_to_mean,
-                    jia_allometric=args.jia_allometric),
+                    model, t, bolus, spec.prime_heparin, spec.ibw_mean, spec.t_to_mean),
                 "protamine_mg_at_1_to_100": core.simplified_amount(
                     t, bolus, spec.prime_heparin, k, spec.t_to_mean, args.prime_timing) / 100.0,
             })
@@ -473,9 +458,14 @@ def run(args) -> Path:
             "k_search_bounds_note": cal.K_BOUNDS_NOTE,
             "primary_objective": "bland_altman",
             "objective_definition": cal.OBJECTIVE_LABELS["bland_altman"],
-            "jia_run_in_paediatric_space": bool(args.paediatric_jia),
-            "jia_allometric_scaling": bool(args.jia_allometric),
-            "iiv_substituted_for_missing_rse": bool(args.allow_iiv_proxy),
+            "jia_population": "adult (small-bodied derivation cohort); the "
+                              "manuscript's paediatric description is an error",
+            "iiv_substituted_for_missing_uncertainty": bool(args.allow_iiv_proxy),
+            "parameter_uncertainty_basis": {
+                m: cal.uncertainty_provenance(m)
+                for m in core.MODEL_NAMES
+                if core.MODEL_PARAMETERS[m].rse or core.MODEL_PARAMETERS[m].bootstrap_ci
+            },
         },
         "sample_sizes": {
             "n_sim_per_calibration": args.n_sim,
@@ -497,7 +487,7 @@ def run(args) -> Path:
             }
             for key, p in core.MODEL_PARAMETERS.items()
         },
-        "calibration_grids": {"adult": ps.ADULT_GRID, "paediatric": ps.PAEDIATRIC_GRID},
+        "calibration_grids": {"adult": ps.ADULT_GRID},
         "outstanding_author_decisions": _outstanding(args),
     }
     (outdir / "manifest.json").write_text(json.dumps(manifest, indent=2, default=str))
@@ -529,16 +519,18 @@ def _outstanding(args) -> list:
             "detail": pending[["model", "description"]].to_dict("records"),
         })
     items.append({
-        "comment": "EB-4",
-        "action": "Confirm the paediatric parameter space for Jia",
-        "detail": {"cohort": ps.CANONICAL_COHORTS["paediatric"].describe(),
-                   "grid": ps.PAEDIATRIC_GRID,
-                   "warning": "The Jia implementation carries no weight covariate, so "
-                              "kinetics are identical at 3 kg and 70 kg unless "
-                              "--jia-allometric is used."
-                   if not args.jia_allometric else
-                   "Conventional allometric exponents (1.0 volumes, 0.75 clearances) "
-                   "are in use; they are not from the source publication."},
+        "comment": "EB-4 / R1 p11 L46",
+        "action": "Correct the manuscript's description of the Jia model",
+        "detail": ("Jia is an ADULT model derived in a relatively small-bodied "
+                   "population, not a paediatric one. Its Vc of 3.04 L is within "
+                   "2% of Delavenne's adult 3.1 L. The reviewers' request for a "
+                   "paediatric parameter space follows from the manuscript's own "
+                   "mis-description and is answered by correcting the text. The "
+                   "model carries no weight covariate, so it cannot be "
+                   "individualised by weight and the upper end of the adult "
+                   "calibration grid extrapolates beyond its derivation "
+                   "population; both are stated limitations. Transportability to "
+                   "a small-bodied adult population is evaluated explicitly."),
     })
     items.append({
         "comment": "EB-1",
@@ -648,19 +640,34 @@ def _write_summary(outdir, args, spec, k_table, agr, obj, sens, modes, ptim,
             pu_w = row["k_p97_5"] - row["k_p2_5"]
             pu_txt = f"{row['k_p2_5']:.5f} to {row['k_p97_5']:.5f}"
             ratio = f"{pu_w / mc_w:.0f}x wider"
-            src = row["uncertainty_source"]
+            src = ("interindividual variability (proxy)"
+                   if row["uncertainty_source"] == "iiv"
+                   else ("published bootstrap 95% CI"
+                         if any(str(v).startswith("published bootstrap")
+                                for k2, v in row.items() if k2.startswith("basis_"))
+                         else "published %RSE"))
         else:
-            pu_txt, ratio, src = "not propagated", "--", row["note"].split(".")[0]
+            pu_txt, ratio, src = ("not propagated", "--",
+                                  "closed-form expression; none published")
         L.append(f"| {r['display_name']} | {r['k']:.5f} | "
                  f"{r['mc_interval_low']:.5f} to {r['mc_interval_high']:.5f} | "
                  f"{pu_txt} | {ratio} | {src} |")
-    if args.allow_iiv_proxy:
-        L.append("\n**Caveat.** No %RSE has yet been transcribed from the source "
-                 "publications, so interindividual variability was substituted. "
-                 "IIV describes spread between patients, not uncertainty in the "
-                 "published estimate, so the parameter-uncertainty interval above "
-                 "is an over-estimate and must be described as such until the "
-                 "published RSEs are supplied.")
+    used_proxy = (pu["uncertainty_source"] == "iiv").any()
+    if used_proxy:
+        L.append("\n**Caveat.** Interindividual variability was substituted for "
+                 "estimation uncertainty in at least one model. IIV describes "
+                 "spread between patients, not uncertainty in the published "
+                 "estimate, so that interval is an over-estimate.")
+    else:
+        L.append("\nEvery interval above is propagated from uncertainty the source "
+                 "publications actually report: the asymptotic %RSE for Lanoiselee "
+                 "and Delavenne, and the non-parametric bootstrap interval for Jia, "
+                 "which publishes one. For Delavenne the draw includes the weight "
+                 "exponent on clearance (0.767, 29% RSE); because that covariate is "
+                 "centred on 70 kg its contribution is zero at the canonical "
+                 "cohort's IBW and reaches about 25% on clearance at the ends of "
+                 "the weight grid, so it moves the boundary and transportability "
+                 "results rather than this table.")
     L.append("")
 
     L.append("## Coverage of the full input range and its boundaries (EB-4)\n")
@@ -690,8 +697,9 @@ def _write_summary(outdir, args, spec, k_table, agr, obj, sens, modes, ptim,
                            values="mape_transported")
     L.append("Mean absolute percentage error when the canonically calibrated k is "
              "applied unchanged to a shifted population. Adult models are not run "
-             "in paediatric populations, or the paediatric model in adult ones, so "
-             "those cells are marked n/a rather than pooled (EB-4).\n")
+             "All six models are adult and are evaluated in the same populations; "
+             "the small_bodied_adults row matches the body size the Jia model was "
+             "derived in (EB-4, R1 p11 L46).\n")
     L.append("| Institution | " + " | ".join(piv.columns) + " |")
     L.append("|---" * (len(piv.columns) + 1) + "|")
     for name, row in piv.iterrows():
@@ -752,12 +760,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--threshold-iu", type=float, default=A.DEFAULT_THRESHOLD_IU)
     p.add_argument("--threshold-pct", type=float, default=A.DEFAULT_THRESHOLD_PCT)
     p.add_argument("--allow-iiv-proxy", action="store_true",
-                   help="substitute IIV where no %%RSE is published (EB-2); "
-                        "overstates parameter uncertainty and is recorded as such")
+                   help="substitute interindividual variability where a model "
+                        "publishes no estimation uncertainty (EB-2). No longer "
+                        "needed: all three population models now carry published "
+                        "%%RSE or bootstrap intervals. Overstates parameter "
+                        "uncertainty and is recorded as such.")
     p.add_argument("--jia-allometric", action="store_true",
                    help="apply conventional allometric scaling to Jia (EB-4)")
-    p.add_argument("--no-paediatric-jia", dest="paediatric_jia", action="store_false",
-                   help="run Jia in the adult space, as the submitted analysis did")
     p.add_argument("--primary-model", default="lanoiselee", choices=list(core.MODEL_NAMES))
     p.add_argument("--n-sim", type=int, default=1000, help="patients per calibration")
     p.add_argument("--n-test", type=int, default=1000, help="patients in the test cohort")
@@ -769,7 +778,6 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--topup-horizon", type=float, default=240.0)
     p.add_argument("--quick", action="store_true",
                    help="small sample sizes, for a smoke test only")
-    p.set_defaults(paediatric_jia=True)
     return p
 
 

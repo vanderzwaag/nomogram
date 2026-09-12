@@ -610,7 +610,6 @@ def run_nomogram(initial_dose_per_kg, t_to_mean, prime_heparin,
 
 from parameter_spaces import (                                  # noqa: E402
     ADULT_GRID,
-    PAEDIATRIC_GRID,
     CANONICAL_COHORTS,
     grid_for,
 )
@@ -631,16 +630,17 @@ def _node_seed(seed, *parts):
 
 def generate_v2_table_deterministic(seed=DEFAULT_SEED, n_sim=200,
                                     evaluation_mode="reversal_endpoint",
-                                    prime_timing="lumped_t0",
-                                    paediatric_jia=True):
+                                    prime_timing="lumped_t0"):
     """Rebuild the per-model k lookup tables.
 
     Now genuinely deterministic, which the name previously only claimed: each
     grid node derives its own seed from `seed` and the node itself, so the same
     command always produces the same tables (EB-6).
 
-    The paediatric Jia model is built over the paediatric grid rather than the
-    adult one (EB-4, R1 p11 L46). The `lo`/`hi` entries are the k values
+    All six models are built over the one adult grid. The manuscript described
+    Jia as paediatric, but its published parameters are adult-scale and its
+    source is an adult study; that comment (EB-4, R1 p11 L46) is answered by
+    correcting the text. The `lo`/`hi` entries are the k values
     obtained at time-on-CPB plus and minus two standard deviations -- a scenario
     range, not an uncertainty interval, and the dashboard labels them as such.
     """
@@ -648,8 +648,7 @@ def generate_v2_table_deterministic(seed=DEFAULT_SEED, n_sim=200,
     status_text = st.empty()
 
     for m_i, model in enumerate(MODEL_NAMES):
-        population = ("paediatric" if model in PAEDIATRIC_MODELS and paediatric_jia
-                      else "adult")
+        population = "adult"
         g = grid_for(population)
         combos = list(itertools.product(g["dose_per_kg"], g["ibw"],
                                         g["time_to_cpb"], g["time_on_cpb"],
@@ -665,9 +664,9 @@ def generate_v2_table_deterministic(seed=DEFAULT_SEED, n_sim=200,
         status_text.text(f"Generating {model} ({population}, {len(combos)} nodes)...")
 
         for i, (hpkg, ibw_m, tto_m, ton_m, p_hep) in enumerate(combos):
-            ibw_sd_val = 10.0 if population == "adult" else 0.4 * ibw_m
+            ibw_sd_val = 10.0
             tto_sd_val = 0.25 * tto_m
-            ton_sd_val = 15.0 if population == "adult" else 0.3 * ton_m
+            ton_sd_val = 15.0
             # A node-specific but fully determined seed. Python's built-in
             # hash() is salted per process, so a stable digest is used instead --
             # otherwise the "deterministic" table would differ between runs.

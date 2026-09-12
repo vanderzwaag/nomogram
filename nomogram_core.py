@@ -45,9 +45,14 @@ DISPLAY_NAMES = {
     "prodose-2": "PRODOSE-2",
 }
 
-# Models that are paediatric in origin and must not be pooled with the adult
-# models or run in an adult parameter space (EB-4, R1 p11 L46).
-PAEDIATRIC_MODELS = ("jia",)
+# All six reference models are adult. The manuscript described Jia as paediatric
+# and EB-4 / R1 p11 L46 both follow from that description, but its published
+# parameters are adult-scale (Vc 3.04 L, within 2% of Delavenne's adult 3.1 L)
+# and the source is an adult cardiac-surgical study in a relatively small-bodied
+# population. That comment is answered by correcting the text, not by a
+# paediatric re-analysis; the transportability evaluation instead includes a
+# small-bodied adult institution matching Jia's derivation population.
+PAEDIATRIC_MODELS: tuple = ()
 
 
 # ==========================================================================
@@ -58,12 +63,21 @@ PAEDIATRIC_MODELS = ("jia",)
 class ParameterSet:
     """Published population parameters and their reported uncertainty.
 
-    ``iiv`` is between-subject (interindividual) variability, expressed as the
-    SD of the log-normal random effect.  ``rse`` is the relative standard error
-    of the *population estimate* -- the quantity EB-2 asks us to propagate.
-    ``None`` means the source publication did not report it (or it has not yet
-    been transcribed), and the analysis runner will say so rather than silently
-    substituting a number.
+    ``iiv``
+        Between-subject (interindividual) variability as the SD of the
+        log-normal random effect, i.e. omega and NOT omega-squared. Sources
+        differ in which they tabulate, so each entry below records what the
+        source printed and any conversion applied.
+    ``rse``
+        Relative standard error of the *population estimate*, as a fraction --
+        the quantity EB-2 asks us to propagate. ``None`` means the source did
+        not report it, and the runner says so rather than substituting a number.
+    ``bootstrap_ci``
+        Published non-parametric 95% confidence interval as ``(low, high)``.
+        Where a source reports one it is preferred over ``rse``: the asymptotic
+        standard error assumes a symmetric, quadratic likelihood, which breaks
+        down for poorly identified parameters -- for Jia's Vp the bootstrap
+        interval is roughly twice the width the RSE implies.
     """
 
     name: str
@@ -71,27 +85,70 @@ class ParameterSet:
     values: Dict[str, float]
     iiv: Dict[str, float] = field(default_factory=dict)
     rse: Dict[str, float] = field(default_factory=dict)
+    bootstrap_ci: Dict[str, tuple] = field(default_factory=dict)
     weight_covariate: bool = False
     notes: str = ""
 
     def missing_rse(self) -> Sequence[str]:
-        return tuple(k for k in self.values if self.rse.get(k) is None)
+        return tuple(k for k in self.values
+                     if self.rse.get(k) is None and k not in self.bootstrap_ci)
+
+    def uncertainty_sigma(self, name: str) -> float | None:
+        """Log-scale SD describing uncertainty in the estimate of ``name``.
+
+        Derived from the published bootstrap interval when there is one --
+        sigma = (ln(high) - ln(low)) / (2 x 1.96) -- and from the RSE otherwise.
+        """
+        import math as _math
+
+        ci = self.bootstrap_ci.get(name)
+        if ci and ci[0] > 0 and ci[1] > 0:
+            return (_math.log(ci[1]) - _math.log(ci[0])) / (2 * 1.96)
+        return self.rse.get(name)
+
+    def uncertainty_basis(self, name: str) -> str:
+        if self.bootstrap_ci.get(name):
+            return "published bootstrap 95% CI"
+        if self.rse.get(name) is not None:
+            return "published %RSE of the estimate"
+        return "not reported"
 
 
 MODEL_PARAMETERS: Dict[str, ParameterSet] = {
     "lanoiselee": ParameterSet(
         name="Lanoiselee",
-        source="Lanoiselee et al. Br J Anaesth 2026;136(3):847-855 (doi 10.1016/j.bja.2025.11.057)",
-        # mL and mL/min, as used by the original R script.
+        source=("Lanoiselee et al. Br J Anaesth 2026;136(3):847-855 "
+                "(doi 10.1016/j.bja.2025.11.057), Supplementary Table 1"),
+        # mL and mL/min. The source tabulates Cl and Q in mL/h.
         values={"Cl": 1500.18 / 60.0, "Vc": 4011.12, "Vp": 1458.59, "Q": 287.57 / 60.0},
-        iiv={"Cl": 0.0983, "Vc": 0.111, "Vp": 0.395, "Q": 0.21},
-        rse={"Cl": None, "Vc": None, "Vp": None, "Q": None},
+        # Inter-individual variability column of Supplementary Table 1.
+        #
+        # CORRECTED. The submitted code used 0.0983 / 0.111 / 0.395 / 0.21, which
+        # are that column's PARENTHETICAL %RSE values (9.83, 11.1, 39.5, 21.0)
+        # divided by 100 -- the precision of the variability estimates, not the
+        # variability itself. All four matched to the digit, so this was a
+        # read-across error rather than a coincidence. The true values are about
+        # 2.1x larger, so every credible band drawn for this model was roughly
+        # half the width it should have been.
+        iiv={"Cl": 0.27, "Vc": 0.22, "Vp": 0.74, "Q": 0.41},
+        # %RSE of the population means, as fractions (4.18, 3.58, 36.5, 11.0).
+        rse={"Cl": 0.0418, "Vc": 0.0358, "Vp": 0.365, "Q": 0.110},
         weight_covariate=False,
         notes=(
             "Fixed population parameters; the published model carries no weight "
             "covariate, so IBW affects the bolus size only, not the kinetics. "
-            "RSE must be transcribed from the source publication before the "
-            "parameter-uncertainty interval can be reported (EB-2). "
+            "Vp is the least well identified parameter in any of the three "
+            "population models (36.5% RSE), and Vp and Q are precisely what make "
+            "the model biexponential -- the structural feature a mono-exponential "
+            "nomogram is least able to reproduce is also the one the reference "
+            "model itself pins down worst. "
+            "The source reports a full PK/PD model (effect compartment plus "
+            "sigmoidal Emax to ACT: Ke 12.77/h, ACT0 115.87 s, Emax 403.97, "
+            "gamma 2.35, C50 2.62 anti-Xa IU/mL) which this pipeline does not "
+            "implement; see PD_PARAMETERS and the EB-1 note below. "
+            "The variability column is labelled only 'Inter-Individual "
+            "Variability' and is READ HERE AS omega (log-scale SD); the source "
+            "does not state the convention. "
             "NOTE: the submitted code held two spellings of Q -- 4.7928 mL/min in "
             "the endpoint model and 287.57/60 = 4.79283 mL/min in the credible-"
             "interval simulation. The unrounded value is used throughout here; "
@@ -100,37 +157,94 @@ MODEL_PARAMETERS: Dict[str, ParameterSet] = {
     ),
     "delavenne": ParameterSet(
         name="Delavenne",
-        source="Delavenne et al.",
+        source="Delavenne et al., Table 2",
         # Litres and L/h as published; converted to mL/min at point of use.
-        values={"Cl_L_h": 0.841, "Vc_L": 3.1, "Vp_L": 2.23, "Q_L_h": 4.67},
-        iiv={"Cl_L_h": 0.221, "Vc_L": 0.119, "Vp_L": 0.0, "Q_L_h": 0.0},
-        rse={"Cl_L_h": None, "Vc_L": None, "Vp_L": None, "Q_L_h": None},
+        # The two weight exponents are parameters, not literals, so that the
+        # 29% RSE on the clearance exponent can be propagated (EB-2).
+        values={"Cl_L_h": 0.841, "Vc_L": 3.1, "Vp_L": 2.23, "Q_L_h": 4.67,
+                "wt_exponent_Vc": 1.0, "wt_exponent_Cl": 0.767},
+        # Interpatient variability column. VERIFIED CORRECT against Table 2 --
+        # this model's values were transcribed properly, which is what confirmed
+        # the Lanoiselee and Jia entries were not. Vp and Q show "--" in the
+        # source and carry no random effect.
+        iiv={"Cl_L_h": 0.221, "Vc_L": 0.119, "Vp_L": 0.0, "Q_L_h": 0.0,
+             "wt_exponent_Vc": 0.0, "wt_exponent_Cl": 0.0},
+        # %RSE of the population means, as fractions (10, 4, 8, 15), plus the
+        # covariate row: the Vc exponent is fixed at 1 and carries no
+        # uncertainty; the Cl exponent is 0.767 with 29% RSE.
+        rse={"Cl_L_h": 0.10, "Vc_L": 0.04, "Vp_L": 0.08, "Q_L_h": 0.15,
+             "wt_exponent_Vc": 0.0, "wt_exponent_Cl": 0.29},
         weight_covariate=True,
         notes=(
-            "Vc scales with weight (exponent 1.0) and Cl with weight (exponent "
-            "0.767). The published model is driven by ACTUAL body weight; the "
-            "pipeline passes IBW, which is a documented approximation (EB-1). "
-            "Vp and Q have no reported IIV and are held fixed."
+            "Vc scales with weight (exponent 1.0, fixed) and Cl with weight "
+            "(exponent 0.767, 29% RSE), both as (WT/70)^exponent. The published "
+            "model is driven by ACTUAL body weight; the pipeline passes IBW, "
+            "which is a documented approximation (EB-1). "
+            "Because the covariate is centred on 70 kg, uncertainty in the "
+            "clearance exponent contributes EXACTLY NOTHING at 70 kg -- the IBW "
+            "of the canonical cohort -- and up to about 25% on clearance at the "
+            "40 and 115 kg ends of the calibration grid. It therefore affects the "
+            "boundary and transportability analyses (EB-4) and not the headline "
+            "interval. "
+            "Vp and Q have no reported IIV and are held fixed between patients, "
+            "but both have a reported RSE and so do contribute to the "
+            "parameter-uncertainty interval. "
+            "The source reports a PD layer (ACT0 116 s, C50 3.49 IU/mL, Emax 720 s, "
+            "no Hill coefficient) not implemented here; see PD_PARAMETERS."
         ),
     ),
     "jia": ParameterSet(
         name="Jia",
-        source="Jia et al. (paediatric cardiac surgery)",
+        source=("Jia et al., Pharmacokinetic model of unfractionated heparin during "
+                "and after cardiopulmonary bypass in cardiac surgery"),
         values={"Cl_L_h": 1.18, "Vc_L": 3.04, "Vp_L": 8.01, "Q_L_h": 0.171},
-        # UNVERIFIED: the dashboard docstring and the dashboard code disagreed.
-        # The docstring said CL 0.176 / Vc 0.114 / Q 0.0573 / Vp 0.111 while the
-        # code used [0.073, 0.081, 0.144, 0.318] and additionally took a square
-        # root of them. Both cannot be right. The values below are the
-        # docstring values, treated as omega SDs; see notes.
-        iiv={"Cl_L_h": 0.176, "Vc_L": 0.114, "Vp_L": 0.111, "Q_L_h": 0.0573},
-        rse={"Cl_L_h": None, "Vc_L": None, "Vp_L": None, "Q_L_h": None},
+        # CORRECTED, and the previous values were wrong three times over.
+        #
+        # The submitted code used [0.073, 0.081, 0.144, 0.318] under a comment
+        # declaring the order [Cl, Vc, Vp, Q]. Those numbers are the
+        # POPULATION-MEAN %RSE column (7.25, 8.09, 14.40, 31.8) divided by 100,
+        # in the source's printed ROW order Cl, Vc, Q, Vp -- so Vp and Q also
+        # received each other's values. The code then took a square root of them,
+        # which would have been right had they been the omega-squared column but
+        # was not right for these. Net effect: Vp was given 38% variability that
+        # the source FIXES AT ZERO, and Q was overstated about 1.8-fold.
+        #
+        # The docstring in that same function gave yet another set
+        # (0.176 / 0.114 / 0.0573 / 0.111) which matches no column of the source
+        # under any transformation; its origin is unknown and it is discarded.
+        #
+        # The source tabulates omega-SQUARED. Converted to omega here:
+        #   Cl sqrt(0.122) = 0.3493, Vc sqrt(0.105) = 0.3240,
+        #   Q  sqrt(0.0978) = 0.3127, Vp fixed at 0.
+        iiv={"Cl_L_h": 0.34928, "Vc_L": 0.32404, "Vp_L": 0.0, "Q_L_h": 0.31273},
+        # %RSE of the population means, as fractions (7.25, 8.09, 31.8, 14.40).
+        rse={"Cl_L_h": 0.0725, "Vc_L": 0.0809, "Vp_L": 0.318, "Q_L_h": 0.1440},
+        # The source also publishes non-parametric bootstrap 95% CIs, which are
+        # preferred over the asymptotic RSE. For the well-identified parameters
+        # the two agree; for Q and Vp the bootstrap interval is about twice as
+        # wide, which is the usual behaviour when the likelihood is not locally
+        # quadratic.
+        bootstrap_ci={"Cl_L_h": (0.99, 1.35), "Vc_L": (2.57, 3.51),
+                      "Vp_L": (2.63, 27.6), "Q_L_h": (0.0977, 0.311)},
         weight_covariate=False,
         notes=(
-            "UNVERIFIED IIV -- resolve against the source publication before "
-            "resubmission. The implementation carries NO weight covariate, so a "
-            "5 kg neonate and a 70 kg adult are given identical kinetics; a "
-            "paediatric parameter space (EB-4) is only meaningful once this is "
-            "settled. See allometric_jia_params()."
+            "AN ADULT MODEL. The submitted manuscript described Jia as paediatric "
+            "and EB-4 and R1 p11 L46 both proceed from that description, but the "
+            "source is an adult cardiac-surgical study in a relatively small-bodied "
+            "(Chinese) population. Its Vc of 3.04 L is within 2% of Delavenne's "
+            "adult 3.1 L and implies a body size of roughly 45-75 kg; a 10 kg child "
+            "would have a Vc near 0.4 L. The correct response to EB-4 and R1 p11 "
+            "L46 is therefore a correction to the manuscript text, not a paediatric "
+            "re-analysis. "
+            "The model carries no weight covariate at all, so within the pipeline "
+            "IBW scales the administered bolus but never the kinetics; the model "
+            "cannot be individualised by weight. Applying it across the upper end "
+            "of the adult calibration grid extrapolates well beyond the body size "
+            "of its derivation population, which is a stated limitation. "
+            "Its peripheral compartment is barely identified (Vp bootstrap CI 2.63 "
+            "to 27.6 L, a tenfold range), so there is little second exponential for "
+            "a mono-exponential approximation to miss -- consistent with Jia being "
+            "the easiest of the six models to approximate."
         ),
     ),
     "prodose": ParameterSet(
@@ -161,6 +275,41 @@ MODEL_PARAMETERS: Dict[str, ParameterSet] = {
         weight_covariate=False,
         notes="Fixed 250 min slow half-life; no weight or dose covariate.",
     ),
+}
+
+
+# ==========================================================================
+# THE PHARMACODYNAMIC LAYER THIS PIPELINE DOES NOT IMPLEMENT (EB-1)
+# ==========================================================================
+#
+# Two of the three population models are PK/PD models: they carry an explicit
+# link from anti-Xa activity to activated clotting time. The nomogram pipeline
+# stops at the pharmacokinetic central-compartment amount and applies a fixed
+# institutional protamine ratio to it. That is a deliberate, stated choice, and
+# the parameters below are recorded so the decision can be defended rather than
+# merely conceded.
+#
+# The argument for stopping at the PK layer is that the two reference models
+# disagree about the PD relationship by more than the error being characterised:
+# at the same anti-Xa concentration they predict activated clotting times 90 to
+# 125 s apart across the whole clinical range, with ceilings of 520 s and 836 s.
+# A PD layer would import that unresolved disagreement rather than remove it.
+# For scale, a 10% error in residual heparin moves the Lanoiselee-predicted ACT
+# by about 17 s, well inside that model's own 11% proportional residual error.
+#
+# These are reference values only -- nothing in the pipeline reads them.
+PD_PARAMETERS = {
+    "lanoiselee": {
+        "model": "effect compartment (Ke 12.77 /h) plus sigmoidal Emax",
+        "ACT0_s": 115.87, "Emax_s": 403.97, "gamma": 2.35,
+        "C50_antiXa_IU_mL": 2.62,
+        "proportional_residual_error": {"anti_Xa": 0.29, "ACT": 0.11},
+    },
+    "delavenne": {
+        "model": "Emax, no Hill coefficient reported",
+        "ACT0_s": 116.0, "Emax_s": 720.0, "gamma": 1.0,
+        "C50_antiXa_IU_mL": 3.49,
+    },
 }
 
 
@@ -222,8 +371,8 @@ def get_delavenne_params(weight_kg: float, overrides: Dict[str, float] | None = 
     if overrides:
         p.update(overrides)
 
-    Vc = p["Vc_L"] * (weight_kg / 70.0) ** 1.0 * 1000.0
-    Cl = (p["Cl_L_h"] * (weight_kg / 70.0) ** 0.767) * 1000.0 / 60.0
+    Vc = p["Vc_L"] * (weight_kg / 70.0) ** p["wt_exponent_Vc"] * 1000.0
+    Cl = (p["Cl_L_h"] * (weight_kg / 70.0) ** p["wt_exponent_Cl"]) * 1000.0 / 60.0
     Vp = p["Vp_L"] * 1000.0
     Q = p["Q_L_h"] * 1000.0 / 60.0
     return _biexponential_constants(Cl, Vc, Vp, Q)
@@ -236,34 +385,25 @@ def delavenne_response(dose, t, weight_kg, overrides=None):
 
 # ---------------------------------------------------------------------- Jia
 
-# Conventional allometric exponents. These are NOT taken from the Jia source
-# publication; they are the standard values used when a paediatric model has to
-# be extrapolated across a wide weight range. Enabling them is an explicit
-# author decision (EB-4) and is recorded in the run manifest.
-JIA_ALLOMETRY = {"reference_weight_kg": 70.0, "volume_exponent": 1.0, "clearance_exponent": 0.75}
+def get_jia_params(weight_kg: float, overrides=None):
+    """Jia parameters.
 
-
-def get_jia_params(weight_kg: float, overrides=None, allometric: bool = False):
+    ``weight_kg`` is accepted for signature symmetry with the other models and
+    is deliberately unused: the published model carries no weight covariate, so
+    its kinetics are identical at every body weight. Within the pipeline, IBW
+    therefore scales the administered bolus but never the elimination.
+    """
     p = dict(MODEL_PARAMETERS["jia"].values)
     if overrides:
         p.update(overrides)
-
-    Vc_L, Cl_L_h, Vp_L, Q_L_h = p["Vc_L"], p["Cl_L_h"], p["Vp_L"], p["Q_L_h"]
-
-    if allometric:
-        ratio = weight_kg / JIA_ALLOMETRY["reference_weight_kg"]
-        Vc_L *= ratio ** JIA_ALLOMETRY["volume_exponent"]
-        Vp_L *= ratio ** JIA_ALLOMETRY["volume_exponent"]
-        Cl_L_h *= ratio ** JIA_ALLOMETRY["clearance_exponent"]
-        Q_L_h *= ratio ** JIA_ALLOMETRY["clearance_exponent"]
-
     return _biexponential_constants(
-        Cl_L_h * 1000.0 / 60.0, Vc_L * 1000.0, Vp_L * 1000.0, Q_L_h * 1000.0 / 60.0
+        p["Cl_L_h"] * 1000.0 / 60.0, p["Vc_L"] * 1000.0,
+        p["Vp_L"] * 1000.0, p["Q_L_h"] * 1000.0 / 60.0,
     )
 
 
-def jia_response(dose, t, weight_kg, overrides=None, allometric: bool = False):
-    alpha, beta, k21, _ = get_jia_params(weight_kg, overrides, allometric)
+def jia_response(dose, t, weight_kg, overrides=None):
+    alpha, beta, k21, _ = get_jia_params(weight_kg, overrides)
     return _biexponential_amount(dose, t, alpha, beta, k21)
 
 
@@ -286,7 +426,6 @@ def reference_amount(
     time_to_cpb: float,
     *,
     overrides: Dict[str, float] | None = None,
-    jia_allometric: bool = False,
     covariate_bolus: float | None = None,
 ) -> float:
     """Central-compartment heparin amount (IU) at absolute time ``t`` (min).
@@ -371,9 +510,9 @@ def reference_amount(
         return amount
 
     if key == "jia":
-        amount = jia_response(heparin_bolus, t, weight_kg, overrides, jia_allometric)
+        amount = jia_response(heparin_bolus, t, weight_kg, overrides)
         if prime_active:
-            amount += jia_response(heparin_prime, prime_elapsed, weight_kg, overrides, jia_allometric)
+            amount += jia_response(heparin_prime, prime_elapsed, weight_kg, overrides)
         return amount
 
     raise ValueError(f"Unhandled model: {model_name!r}")
@@ -388,7 +527,6 @@ def get_reference_dose(
     time_on_cpb: float,
     *,
     overrides: Dict[str, float] | None = None,
-    jia_allometric: bool = False,
 ) -> float:
     """Reference-model residual heparin at the reversal timepoint."""
     return reference_amount(
@@ -399,7 +537,6 @@ def get_reference_dose(
         weight_kg,
         time_to_cpb,
         overrides=overrides,
-        jia_allometric=jia_allometric,
     )
 
 
@@ -413,7 +550,6 @@ def reference_amount_with_topups(
     topups: Sequence[tuple] = (),
     *,
     overrides=None,
-    jia_allometric: bool = False,
 ) -> float:
     """Reference amount at ``t`` including supplemental boluses by superposition.
 
@@ -423,7 +559,7 @@ def reference_amount_with_topups(
     """
     amount = reference_amount(
         model_name, t, heparin_bolus, heparin_prime, weight_kg, time_to_cpb,
-        overrides=overrides, jia_allometric=jia_allometric,
+        overrides=overrides,
     )
     for t_bolus, dose in topups:
         if t >= t_bolus and dose:
@@ -433,7 +569,7 @@ def reference_amount_with_topups(
             # than at the half-life a small induction dose would have had.
             amount += reference_amount(
                 model_name, t - t_bolus, dose, 0.0, weight_kg, 0.0,
-                overrides=overrides, jia_allometric=jia_allometric,
+                overrides=overrides,
                 covariate_bolus=heparin_bolus,
             )
     return amount
@@ -586,7 +722,6 @@ def reference_amount_array(
     time_to_cpb,
     *,
     overrides: Dict[str, float] | None = None,
-    jia_allometric: bool = False,
     covariate_bolus=None,
 ):
     """Vectorised ``reference_amount``. All arguments broadcast."""
@@ -655,22 +790,16 @@ def reference_amount_array(
         p = dict(MODEL_PARAMETERS[key].values)
         if overrides:
             p.update(overrides)
-        Vc = p["Vc_L"] * (weight / 70.0) * 1000.0
-        Cl = p["Cl_L_h"] * (weight / 70.0) ** 0.767 * 1000.0 / 60.0
+        Vc = p["Vc_L"] * (weight / 70.0) ** p["wt_exponent_Vc"] * 1000.0
+        Cl = p["Cl_L_h"] * (weight / 70.0) ** p["wt_exponent_Cl"] * 1000.0 / 60.0
         alpha, beta, k21 = _constants(Cl, Vc, p["Vp_L"] * 1000.0, p["Q_L_h"] * 1000.0 / 60.0)
     elif key == "jia":
         p = dict(MODEL_PARAMETERS[key].values)
         if overrides:
             p.update(overrides)
-        Vc_L, Cl_L_h, Vp_L, Q_L_h = p["Vc_L"], p["Cl_L_h"], p["Vp_L"], p["Q_L_h"]
-        if jia_allometric:
-            ratio = weight / JIA_ALLOMETRY["reference_weight_kg"]
-            Vc_L = Vc_L * ratio ** JIA_ALLOMETRY["volume_exponent"]
-            Vp_L = Vp_L * ratio ** JIA_ALLOMETRY["volume_exponent"]
-            Cl_L_h = Cl_L_h * ratio ** JIA_ALLOMETRY["clearance_exponent"]
-            Q_L_h = Q_L_h * ratio ** JIA_ALLOMETRY["clearance_exponent"]
         alpha, beta, k21 = _constants(
-            Cl_L_h * 1000.0 / 60.0, Vc_L * 1000.0, Vp_L * 1000.0, Q_L_h * 1000.0 / 60.0
+            p["Cl_L_h"] * 1000.0 / 60.0, p["Vc_L"] * 1000.0,
+            p["Vp_L"] * 1000.0, p["Q_L_h"] * 1000.0 / 60.0,
         )
     else:
         raise ValueError(f"Unhandled model: {model_name!r}")

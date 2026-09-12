@@ -161,21 +161,45 @@ def test_correlated_cohort_induces_correlation():
 
 # --------------------------------------------------- parameter uncertainty
 
-def test_parameter_uncertainty_refuses_to_invent_an_rse():
-    """EB-2 must be answered with published uncertainty or not at all."""
-    rep = cal.parameter_uncertainty(SPEC, "lanoiselee", seed=1, n_draws=2, n_sim=100)
-    assert not rep.available
-    assert "RSE" in rep.reason
+def test_parameter_uncertainty_uses_published_numbers_for_every_population_model():
+    """EB-2 is now answered from published uncertainty, with no proxy needed."""
+    for model in ("lanoiselee", "delavenne", "jia"):
+        rep = cal.parameter_uncertainty(SPEC, model, seed=1, n_draws=6, n_sim=150)
+        assert rep.available, rep.reason
+        assert rep.source == "estimate"
+        assert rep.provenance and "not reported" not in rep.provenance.values()
 
 
-def test_parameter_uncertainty_runs_on_the_iiv_proxy_when_asked():
+def test_jia_propagation_uses_its_bootstrap_interval():
+    rep = cal.parameter_uncertainty(SPEC, "jia", seed=1, n_draws=4, n_sim=150)
+    assert rep.provenance["Vp_L"] == "published bootstrap 95% CI"
+    assert "bootstrap" in rep.reason
+
+
+def test_delavenne_propagation_includes_the_weight_exponent():
+    """The covariate exponent carries a 29% RSE and must be drawn, not frozen."""
+    rep = cal.parameter_uncertainty(SPEC, "delavenne", seed=1, n_draws=8, n_sim=150)
+    assert "param_wt_exponent_Cl" in rep.draws
+    assert rep.draws["param_wt_exponent_Cl"].nunique() > 1
+    # The fixed exponent on Vc has no uncertainty and must not move.
+    assert rep.draws["param_wt_exponent_Vc"].nunique() == 1
+
+
+def test_iiv_proxy_is_still_available_but_no_longer_needed():
     rep = cal.parameter_uncertainty(SPEC, "lanoiselee", seed=1, n_draws=6, n_sim=150,
-                                    allow_iiv_proxy=True)
-    assert rep.available
-    assert rep.source == "iiv"
-    assert len(rep.draws) == 6
-    # A parameter-uncertainty interval must be wider than a pure sampling one.
-    assert rep.draws["k"].std() > 0
+                                    source="iiv")
+    assert rep.available and rep.source == "iiv"
+    assert "overstates" in rep.reason
+
+
+def test_iiv_proxy_is_wider_than_published_estimation_uncertainty():
+    """Interindividual variability is spread between patients, not uncertainty in
+    the estimate, so substituting it must overstate the interval."""
+    est = cal.parameter_uncertainty(SPEC, "lanoiselee", seed=3, n_draws=40, n_sim=300)
+    iiv = cal.parameter_uncertainty(SPEC, "lanoiselee", seed=3, n_draws=40, n_sim=300,
+                                    source="iiv")
+    width = lambda d: cal.summarise_k(d["k"])["k_p97_5"] - cal.summarise_k(d["k"])["k_p2_5"]
+    assert width(iiv.draws) > width(est.draws)
 
 
 def test_closed_form_models_have_no_parameter_uncertainty_to_propagate():

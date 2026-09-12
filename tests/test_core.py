@@ -183,18 +183,125 @@ def test_unknown_prime_timing_rejected():
         core.simplified_model_dose(28000, 5000, 70, 15, 60, 0.007, "whenever")
 
 
-def test_jia_has_no_weight_covariate_by_default():
-    """Documents a real limitation flagged for EB-4: the Jia implementation
-    carries no weight covariate, so a 5 kg neonate and a 70 kg adult are given
-    identical kinetics. A paediatric parameter space is only meaningful once
-    this is either accepted explicitly or replaced by allometric scaling."""
-    a = core.jia_response(1000.0, 60.0, 5.0)
-    b = core.jia_response(1000.0, 60.0, 70.0)
-    assert a == pytest.approx(b, rel=1e-12)
+def test_jia_has_no_weight_covariate():
+    """The Jia model carries no weight covariate, so its kinetics are identical
+    at every body weight.
 
-    scaled_small = core.jia_response(1000.0, 60.0, 5.0, allometric=True)
-    scaled_large = core.jia_response(1000.0, 60.0, 70.0, allometric=True)
-    assert scaled_small != pytest.approx(scaled_large, rel=1e-6)
+    In the submitted code this was hidden behind the manuscript's claim that Jia
+    was a paediatric model, which made it look like a defect. It is not: Jia is
+    an adult model and simply has no weight term. Within the pipeline IBW
+    therefore scales the administered bolus but never the elimination, which is
+    a stated limitation rather than a bug.
+    """
+    for w in (45.0, 70.0, 115.0):
+        assert core.jia_response(1000.0, 60.0, w) == pytest.approx(
+            core.jia_response(1000.0, 60.0, 70.0), rel=1e-12)
+
+
+def test_no_model_is_marked_paediatric():
+    """All six reference models are adult, Jia included (EB-4, R1 p11 L46)."""
+    assert core.PAEDIATRIC_MODELS == ()
+
+
+def test_jia_parameters_are_adult_scale():
+    """The evidence that settled the paediatric question: Jia's central volume is
+    an adult one, within a few percent of Delavenne's."""
+    jia_vc = core.MODEL_PARAMETERS["jia"].values["Vc_L"]
+    delavenne_vc = core.MODEL_PARAMETERS["delavenne"].values["Vc_L"]
+    assert abs(jia_vc - delavenne_vc) / delavenne_vc < 0.05
+    # A 10 kg child's central volume would be roughly an order of magnitude less.
+    assert jia_vc > 5 * (10 * 40 / 1000)
+
+
+def test_delavenne_weight_exponents_are_parameters_not_literals():
+    """The clearance exponent carries a 29% RSE, so it has to be overridable for
+    that uncertainty to propagate (EB-2)."""
+    vals = core.MODEL_PARAMETERS["delavenne"].values
+    assert vals["wt_exponent_Vc"] == 1.0
+    assert vals["wt_exponent_Cl"] == 0.767
+    assert core.MODEL_PARAMETERS["delavenne"].rse["wt_exponent_Cl"] == 0.29
+
+    base = core.get_reference_dose("delavenne", 28000, 5000, 115, 15, 60)
+    shifted = core.reference_amount("delavenne", 75, 28000, 5000, 115, 15,
+                                    overrides={**vals, "wt_exponent_Cl": 1.0})
+    assert shifted != pytest.approx(base, rel=1e-6)
+
+
+def test_covariate_uncertainty_vanishes_at_the_reference_weight():
+    """The covariate is centred on 70 kg, so changing its exponent can have no
+    effect there and grows towards the ends of the weight grid. That is why it
+    moves the boundary results and not the headline interval."""
+    vals = core.MODEL_PARAMETERS["delavenne"].values
+    alt = {**vals, "wt_exponent_Cl": 1.2}
+
+    at_70 = core.reference_amount("delavenne", 75, 28000, 5000, 70, 15)
+    at_70_alt = core.reference_amount("delavenne", 75, 28000, 5000, 70, 15, overrides=alt)
+    assert at_70 == pytest.approx(at_70_alt, rel=1e-12)
+
+    for w in (40.0, 115.0):
+        a = core.reference_amount("delavenne", 75, 28000, 5000, w, 15)
+        b = core.reference_amount("delavenne", 75, 28000, 5000, w, 15, overrides=alt)
+        assert abs(a - b) / a > 0.01
+
+
+def test_published_uncertainty_is_recorded_for_every_population_model():
+    """EB-2 can only be answered from published numbers, so every structural
+    parameter of the three population-PK models must carry one."""
+    for key in ("lanoiselee", "delavenne", "jia"):
+        pset = core.MODEL_PARAMETERS[key]
+        assert pset.missing_rse() == (), (
+            f"{key} still lacks published uncertainty for {pset.missing_rse()}")
+        for name in pset.values:
+            assert pset.uncertainty_basis(name) != "not reported"
+
+
+def test_jia_prefers_its_published_bootstrap_interval():
+    """Jia publishes bootstrap CIs; for the poorly identified parameters they are
+    materially wider than the asymptotic RSE, so the CI must win."""
+    pset = core.MODEL_PARAMETERS["jia"]
+    assert pset.uncertainty_basis("Vp_L") == "published bootstrap 95% CI"
+    assert pset.uncertainty_sigma("Vp_L") > 1.5 * pset.rse["Vp_L"]
+    # Well-identified parameters: the two bases agree closely.
+    assert pset.uncertainty_sigma("Vc_L") == pytest.approx(pset.rse["Vc_L"], rel=0.1)
+
+
+def test_jia_iiv_is_the_square_root_of_the_published_omega_squared():
+    """The source tabulates omega-squared; MODEL_PARAMETERS stores omega.
+
+    The submitted code instead held the population-mean %RSE column, with Vp and
+    Q transposed, and then square-rooted it -- so Vp received 38% variability
+    that the source fixes at zero.
+    """
+    published_omega_sq = {"Cl_L_h": 0.122, "Vc_L": 0.105, "Q_L_h": 0.0978, "Vp_L": 0.0}
+    iiv = core.MODEL_PARAMETERS["jia"].iiv
+    for name, w2 in published_omega_sq.items():
+        assert iiv[name] == pytest.approx(math.sqrt(w2), abs=1e-4)
+    assert iiv["Vp_L"] == 0.0, "the source fixes the peripheral volume's IIV at zero"
+
+    superseded = {"Cl_L_h": 0.073, "Vc_L": 0.081, "Vp_L": 0.144, "Q_L_h": 0.318}
+    for name, bad in superseded.items():
+        assert iiv[name] != pytest.approx(bad, abs=1e-6)
+
+
+def test_lanoiselee_iiv_is_not_the_rse_of_the_iiv():
+    """The submitted values were that column's parenthetical %RSE (9.83, 11.1,
+    39.5, 21.0) divided by 100, which understated the variability about 2.1x."""
+    iiv = core.MODEL_PARAMETERS["lanoiselee"].iiv
+    assert iiv == {"Cl": 0.27, "Vc": 0.22, "Vp": 0.74, "Q": 0.41}
+    for name, superseded in (("Cl", 0.0983), ("Vc", 0.111), ("Vp", 0.395), ("Q", 0.21)):
+        assert iiv[name] != pytest.approx(superseded, abs=1e-6)
+
+
+def test_delavenne_iiv_was_already_correct():
+    """Delavenne is the control: its transcription was right, which is what
+    established that the other two were wrong rather than following a different
+    convention."""
+    iiv = core.MODEL_PARAMETERS["delavenne"].iiv
+    assert iiv["Cl_L_h"] == 0.221 and iiv["Vc_L"] == 0.119
+    # The source shows "--" for Vp and Q: no random effect.
+    assert iiv["Vp_L"] == 0.0 and iiv["Q_L_h"] == 0.0
+    # But both do carry an RSE, so they still enter the EB-2 propagation.
+    assert core.MODEL_PARAMETERS["delavenne"].rse["Vp_L"] > 0
 
 
 def test_parameter_provenance_is_recorded():

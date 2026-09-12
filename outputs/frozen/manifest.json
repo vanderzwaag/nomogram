@@ -1,5 +1,5 @@
 {
-  "generated_utc": "2026-09-12T16:57:32.359490+00:00",
+  "generated_utc": "2026-09-12T18:53:39.608586+00:00",
   "analysis_version": "2.0.0",
   "core_version": "2.0.0",
   "calibration_version": "2.0.0",
@@ -14,16 +14,15 @@
     "prime_timing": 7,
     "institutions": 8,
     "correlated": 9,
-    "paediatric": 10,
     "loa_weight": 11,
     "evaluation_mode": 12
   },
-  "command_line": "run_analysis.py --seed 20260912 --outdir outputs/frozen --allow-iiv-proxy",
+  "command_line": "run_analysis.py --seed 20260912 --outdir outputs/frozen",
   "git": {
-    "commit": "def13e579f30c31fb7db705c568188dc4839220e",
-    "short_commit": "def13e5",
+    "commit": "fa471306dba46bf703a1b42dc3121a262b5e9656",
+    "short_commit": "fa47130",
     "branch": "claude/manuscript-revision-code-j9hc9b",
-    "describe": "def13e5-dirty",
+    "describe": "fa47130-dirty",
     "dirty": true
   },
   "software_versions": {
@@ -66,9 +65,30 @@
     "k_search_bounds_note": "k restricted to 0.001-0.03 /min, i.e. an apparent half-life of 23 to 693 min",
     "primary_objective": "bland_altman",
     "objective_definition": "|bias| + 0.1 x LoA width (primary)",
-    "jia_run_in_paediatric_space": true,
-    "jia_allometric_scaling": false,
-    "iiv_substituted_for_missing_rse": true
+    "jia_population": "adult (small-bodied derivation cohort); the manuscript's paediatric description is an error",
+    "iiv_substituted_for_missing_uncertainty": false,
+    "parameter_uncertainty_basis": {
+      "delavenne": {
+        "Cl_L_h": "published %RSE of the estimate",
+        "Vc_L": "published %RSE of the estimate",
+        "Vp_L": "published %RSE of the estimate",
+        "Q_L_h": "published %RSE of the estimate",
+        "wt_exponent_Vc": "published %RSE of the estimate",
+        "wt_exponent_Cl": "published %RSE of the estimate"
+      },
+      "jia": {
+        "Cl_L_h": "published bootstrap 95% CI",
+        "Vc_L": "published bootstrap 95% CI",
+        "Vp_L": "published bootstrap 95% CI",
+        "Q_L_h": "published bootstrap 95% CI"
+      },
+      "lanoiselee": {
+        "Cl": "published %RSE of the estimate",
+        "Vc": "published %RSE of the estimate",
+        "Vp": "published %RSE of the estimate",
+        "Q": "published %RSE of the estimate"
+      }
+    }
   },
   "sample_sizes": {
     "n_sim_per_calibration": 1000,
@@ -80,7 +100,7 @@
   },
   "parameter_provenance": {
     "lanoiselee": {
-      "source": "Lanoiselee et al. Br J Anaesth 2026;136(3):847-855 (doi 10.1016/j.bja.2025.11.057)",
+      "source": "Lanoiselee et al. Br J Anaesth 2026;136(3):847-855 (doi 10.1016/j.bja.2025.11.057), Supplementary Table 1",
       "values": {
         "Cl": 25.003,
         "Vc": 4011.12,
@@ -88,57 +108,53 @@
         "Q": 4.792833333333333
       },
       "iiv": {
-        "Cl": 0.0983,
-        "Vc": 0.111,
-        "Vp": 0.395,
-        "Q": 0.21
+        "Cl": 0.27,
+        "Vc": 0.22,
+        "Vp": 0.74,
+        "Q": 0.41
       },
       "rse": {
-        "Cl": null,
-        "Vc": null,
-        "Vp": null,
-        "Q": null
+        "Cl": 0.0418,
+        "Vc": 0.0358,
+        "Vp": 0.365,
+        "Q": 0.11
       },
       "weight_covariate": false,
-      "notes": "Fixed population parameters; the published model carries no weight covariate, so IBW affects the bolus size only, not the kinetics. RSE must be transcribed from the source publication before the parameter-uncertainty interval can be reported (EB-2). NOTE: the submitted code held two spellings of Q -- 4.7928 mL/min in the endpoint model and 287.57/60 = 4.79283 mL/min in the credible-interval simulation. The unrounded value is used throughout here; the difference is about 0.02 IU at the reversal timepoint.",
-      "missing_rse": [
-        "Cl",
-        "Vc",
-        "Vp",
-        "Q"
-      ]
+      "notes": "Fixed population parameters; the published model carries no weight covariate, so IBW affects the bolus size only, not the kinetics. Vp is the least well identified parameter in any of the three population models (36.5% RSE), and Vp and Q are precisely what make the model biexponential -- the structural feature a mono-exponential nomogram is least able to reproduce is also the one the reference model itself pins down worst. The source reports a full PK/PD model (effect compartment plus sigmoidal Emax to ACT: Ke 12.77/h, ACT0 115.87 s, Emax 403.97, gamma 2.35, C50 2.62 anti-Xa IU/mL) which this pipeline does not implement; see PD_PARAMETERS and the EB-1 note below. The variability column is labelled only 'Inter-Individual Variability' and is READ HERE AS omega (log-scale SD); the source does not state the convention. NOTE: the submitted code held two spellings of Q -- 4.7928 mL/min in the endpoint model and 287.57/60 = 4.79283 mL/min in the credible-interval simulation. The unrounded value is used throughout here; the difference is about 0.02 IU at the reversal timepoint.",
+      "missing_rse": []
     },
     "delavenne": {
-      "source": "Delavenne et al.",
+      "source": "Delavenne et al., Table 2",
       "values": {
         "Cl_L_h": 0.841,
         "Vc_L": 3.1,
         "Vp_L": 2.23,
-        "Q_L_h": 4.67
+        "Q_L_h": 4.67,
+        "wt_exponent_Vc": 1.0,
+        "wt_exponent_Cl": 0.767
       },
       "iiv": {
         "Cl_L_h": 0.221,
         "Vc_L": 0.119,
         "Vp_L": 0.0,
-        "Q_L_h": 0.0
+        "Q_L_h": 0.0,
+        "wt_exponent_Vc": 0.0,
+        "wt_exponent_Cl": 0.0
       },
       "rse": {
-        "Cl_L_h": null,
-        "Vc_L": null,
-        "Vp_L": null,
-        "Q_L_h": null
+        "Cl_L_h": 0.1,
+        "Vc_L": 0.04,
+        "Vp_L": 0.08,
+        "Q_L_h": 0.15,
+        "wt_exponent_Vc": 0.0,
+        "wt_exponent_Cl": 0.29
       },
       "weight_covariate": true,
-      "notes": "Vc scales with weight (exponent 1.0) and Cl with weight (exponent 0.767). The published model is driven by ACTUAL body weight; the pipeline passes IBW, which is a documented approximation (EB-1). Vp and Q have no reported IIV and are held fixed.",
-      "missing_rse": [
-        "Cl_L_h",
-        "Vc_L",
-        "Vp_L",
-        "Q_L_h"
-      ]
+      "notes": "Vc scales with weight (exponent 1.0, fixed) and Cl with weight (exponent 0.767, 29% RSE), both as (WT/70)^exponent. The published model is driven by ACTUAL body weight; the pipeline passes IBW, which is a documented approximation (EB-1). Because the covariate is centred on 70 kg, uncertainty in the clearance exponent contributes EXACTLY NOTHING at 70 kg -- the IBW of the canonical cohort -- and up to about 25% on clearance at the 40 and 115 kg ends of the calibration grid. It therefore affects the boundary and transportability analyses (EB-4) and not the headline interval. Vp and Q have no reported IIV and are held fixed between patients, but both have a reported RSE and so do contribute to the parameter-uncertainty interval. The source reports a PD layer (ACT0 116 s, C50 3.49 IU/mL, Emax 720 s, no Hill coefficient) not implemented here; see PD_PARAMETERS.",
+      "missing_rse": []
     },
     "jia": {
-      "source": "Jia et al. (paediatric cardiac surgery)",
+      "source": "Jia et al., Pharmacokinetic model of unfractionated heparin during and after cardiopulmonary bypass in cardiac surgery",
       "values": {
         "Cl_L_h": 1.18,
         "Vc_L": 3.04,
@@ -146,25 +162,20 @@
         "Q_L_h": 0.171
       },
       "iiv": {
-        "Cl_L_h": 0.176,
-        "Vc_L": 0.114,
-        "Vp_L": 0.111,
-        "Q_L_h": 0.0573
+        "Cl_L_h": 0.34928,
+        "Vc_L": 0.32404,
+        "Vp_L": 0.0,
+        "Q_L_h": 0.31273
       },
       "rse": {
-        "Cl_L_h": null,
-        "Vc_L": null,
-        "Vp_L": null,
-        "Q_L_h": null
+        "Cl_L_h": 0.0725,
+        "Vc_L": 0.0809,
+        "Vp_L": 0.318,
+        "Q_L_h": 0.144
       },
       "weight_covariate": false,
-      "notes": "UNVERIFIED IIV -- resolve against the source publication before resubmission. The implementation carries NO weight covariate, so a 5 kg neonate and a 70 kg adult are given identical kinetics; a paediatric parameter space (EB-4) is only meaningful once this is settled. See allometric_jia_params().",
-      "missing_rse": [
-        "Cl_L_h",
-        "Vc_L",
-        "Vp_L",
-        "Q_L_h"
-      ]
+      "notes": "AN ADULT MODEL. The submitted manuscript described Jia as paediatric and EB-4 and R1 p11 L46 both proceed from that description, but the source is an adult cardiac-surgical study in a relatively small-bodied (Chinese) population. Its Vc of 3.04 L is within 2% of Delavenne's adult 3.1 L and implies a body size of roughly 45-75 kg; a 10 kg child would have a Vc near 0.4 L. The correct response to EB-4 and R1 p11 L46 is therefore a correction to the manuscript text, not a paediatric re-analysis. The model carries no weight covariate at all, so within the pipeline IBW scales the administered bolus but never the kinetics; the model cannot be individualised by weight. Applying it across the upper end of the adult calibration grid extrapolates well beyond the body size of its derivation population, which is a stated limitation. Its peripheral compartment is barely identified (Vp bootstrap CI 2.63 to 27.6 L, a tenfold range), so there is little second exponential for a mono-exponential approximation to miss -- consistent with Jia being the easiest of the six models to approximate.",
+      "missing_rse": []
     },
     "prodose": {
       "source": "PRODOSE nomogram (published closed-form expression)",
@@ -263,64 +274,9 @@
         90,
         120
       ]
-    },
-    "paediatric": {
-      "dose_per_kg": [
-        300,
-        350,
-        400
-      ],
-      "ibw": [
-        3,
-        6,
-        10,
-        20,
-        40
-      ],
-      "prime": [
-        0,
-        1000,
-        2500
-      ],
-      "time_to_cpb": [
-        5,
-        15,
-        25
-      ],
-      "time_on_cpb": [
-        30,
-        60,
-        90,
-        120,
-        180
-      ]
     }
   },
   "outstanding_author_decisions": [
-    {
-      "comment": "EB-2",
-      "action": "Transcribe the published %RSE for these parameters, or state that the parameter-uncertainty interval could not be propagated",
-      "detail": {
-        "lanoiselee": [
-          "Cl",
-          "Vc",
-          "Vp",
-          "Q"
-        ],
-        "delavenne": [
-          "Cl_L_h",
-          "Vc_L",
-          "Vp_L",
-          "Q_L_h"
-        ],
-        "jia": [
-          "Cl_L_h",
-          "Vc_L",
-          "Vp_L",
-          "Q_L_h"
-        ]
-      }
-    },
     {
       "comment": "EB-6",
       "action": "Supply the expected values for the per-source benchmark checks",
@@ -348,43 +304,9 @@
       ]
     },
     {
-      "comment": "EB-4",
-      "action": "Confirm the paediatric parameter space for Jia",
-      "detail": {
-        "cohort": "paediatric_10kg: 400 IU/kg, prime 1500 IU, IBW 10+/-4 kg, time to CPB 10+/-3 min, time on CPB 90+/-30 min [paediatric]",
-        "grid": {
-          "dose_per_kg": [
-            300,
-            350,
-            400
-          ],
-          "ibw": [
-            3,
-            6,
-            10,
-            20,
-            40
-          ],
-          "prime": [
-            0,
-            1000,
-            2500
-          ],
-          "time_to_cpb": [
-            5,
-            15,
-            25
-          ],
-          "time_on_cpb": [
-            30,
-            60,
-            90,
-            120,
-            180
-          ]
-        },
-        "warning": "The Jia implementation carries no weight covariate, so kinetics are identical at 3 kg and 70 kg unless --jia-allometric is used."
-      }
+      "comment": "EB-4 / R1 p11 L46",
+      "action": "Correct the manuscript's description of the Jia model",
+      "detail": "Jia is an ADULT model derived in a relatively small-bodied population, not a paediatric one. Its Vc of 3.04 L is within 2% of Delavenne's adult 3.1 L. The reviewers' request for a paediatric parameter space follows from the manuscript's own mis-description and is answered by correcting the text. The model carries no weight covariate, so it cannot be individualised by weight and the upper end of the adult calibration grid extrapolates beyond its derivation population; both are stated limitations. Transportability to a small-bodied adult population is evaluated explicitly."
     },
     {
       "comment": "EB-1",

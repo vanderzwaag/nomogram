@@ -71,7 +71,6 @@ def evaluate_scenario(model_name: str, k: float, *, heparin_bolus: float,
                       heparin_prime: float, weight_kg: float, time_to_cpb: float,
                       topups: Sequence[tuple], horizon_min: float = 240.0,
                       n_points: int = 49, prime_timing: str = "lumped_t0",
-                      jia_allometric: bool = False,
                       threshold_iu: float = DEFAULT_THRESHOLD_IU) -> Dict[str, float]:
     """Divergence between nomogram and reference over the whole post-bolus window.
 
@@ -85,7 +84,7 @@ def evaluate_scenario(model_name: str, k: float, *, heparin_bolus: float,
     ref = np.array([
         core.reference_amount_with_topups(
             model_name, t, heparin_bolus, heparin_prime, weight_kg, time_to_cpb,
-            topups, jia_allometric=jia_allometric)
+            topups)
         for t in times
     ])
     nom = np.array([
@@ -120,7 +119,6 @@ def topup_grid(model_ks: Dict[str, float], *, heparin_bolus: float,
                times: Iterable[float] = TOPUP_TIMES_MIN,
                horizon_min: float = 240.0,
                prime_timing: str = "lumped_t0",
-               jia_allometric: bool = False,
                threshold_iu: float = DEFAULT_THRESHOLD_IU) -> pd.DataFrame:
     """Full size x timing x repeat grid, for every model, with its own calibrated k."""
     scenarios = topup_scenarios(sizes, times)
@@ -131,7 +129,7 @@ def topup_grid(model_ks: Dict[str, float], *, heparin_bolus: float,
                 model, k, heparin_bolus=heparin_bolus, heparin_prime=heparin_prime,
                 weight_kg=weight_kg, time_to_cpb=time_to_cpb, topups=sc["topups"],
                 horizon_min=horizon_min, prime_timing=prime_timing,
-                jia_allometric=jia_allometric, threshold_iu=threshold_iu,
+                threshold_iu=threshold_iu,
             )
             rows.append({
                 "model": core.canonical_model_name(model),

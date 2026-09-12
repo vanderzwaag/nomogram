@@ -17,7 +17,7 @@ from Nomogram_Models import (
 )
 from nomogram_core import MODEL_PARAMETERS, reference_amount, reference_amount_with_topups
 from agreement import SIGN_CONVENTION_LABEL, difference
-from parameter_spaces import ADULT_GRID, PAEDIATRIC_GRID, describe_grids
+from parameter_spaces import ADULT_GRID, describe_grids
 
 # ==========================================
 # LEGAL DISCLAIMER

@@ -193,7 +193,7 @@ def evaluation_times(cohort: pd.DataFrame, mode: str = "reversal_endpoint",
 
 
 def reference_values(cohort: pd.DataFrame, model_name: str, times: np.ndarray,
-                     overrides=None, jia_allometric: bool = False) -> np.ndarray:
+                     overrides=None) -> np.ndarray:
     return core.reference_amount_array(
         model_name,
         times,
@@ -202,7 +202,6 @@ def reference_values(cohort: pd.DataFrame, model_name: str, times: np.ndarray,
         cohort["ibw"].to_numpy()[:, None],
         cohort["time_to_cpb"].to_numpy()[:, None],
         overrides=overrides,
-        jia_allometric=jia_allometric,
     )
 
 
@@ -322,7 +321,6 @@ def calibrate_k(cohort: pd.DataFrame, model_name: str, *,
                 prime_timing: str = "lumped_t0",
                 k_bounds: tuple = K_BOUNDS,
                 overrides=None,
-                jia_allometric: bool = False,
                 seed: Optional[int] = None,
                 objective_kwargs: Optional[Dict] = None) -> CalibrationResult:
     """Find the decay constant minimising ``objective`` on this cohort."""
@@ -330,7 +328,7 @@ def calibrate_k(cohort: pd.DataFrame, model_name: str, *,
         raise ValueError(f"objective must be one of {sorted(OBJECTIVES)}, got {objective!r}")
 
     times = evaluation_times(cohort, evaluation_mode, n_timepoints)
-    ref = reference_values(cohort, model_name, times, overrides, jia_allometric).ravel()
+    ref = reference_values(cohort, model_name, times, overrides).ravel()
     loss = OBJECTIVES[objective]
     kwargs = objective_kwargs or {}
 
@@ -401,36 +399,54 @@ def monte_carlo_precision(spec: CohortSpec, model_name: str, *, seed: int,
 # ==========================================================================
 
 def _draw_parameter_overrides(model_key: str, rng: np.random.Generator,
-                              source: str = "rse") -> Optional[Dict[str, float]]:
+                              source: str = "estimate") -> Optional[Dict[str, float]]:
     """One draw of the published PK parameters from their reported uncertainty.
 
     ``source``
-        ``"rse"`` -- relative standard error of the population estimate. This is
-            the quantity EB-2 asks to be propagated: how well the published
-            study pinned the parameter down.
+        ``"estimate"`` -- uncertainty in the population estimate, which is what
+            EB-2 asks to be propagated: how well the published study pinned the
+            parameter down. Taken from the published non-parametric bootstrap
+            interval where the source reports one and from the asymptotic %RSE
+            otherwise; ``ParameterSet.uncertainty_basis`` records which was used
+            for each parameter. The two agree for well-identified parameters and
+            diverge where they should: for Jia's peripheral volume the bootstrap
+            interval is roughly twice the width the RSE implies.
         ``"iiv"`` -- interindividual variability. This describes spread between
-            patients, not uncertainty in the estimate. Using it as a proxy for
-            RSE overstates parameter uncertainty and is only permitted
-            explicitly, with the substitution recorded in the manifest.
+            patients, not uncertainty in the estimate, and substituting it
+            overstates parameter uncertainty. It is only used on request, and the
+            substitution is recorded in the manifest.
 
     Returns ``None`` when the requested uncertainty is not available for this
     model, so the caller can report "not propagated" rather than silently
     reporting an interval built from invented numbers.
     """
     pset = core.MODEL_PARAMETERS[model_key]
-    spread = pset.rse if source == "rse" else pset.iiv
-    if not spread or all(spread.get(k) in (None, 0.0) for k in pset.values):
+
+    if source == "iiv":
+        spread = {k: pset.iiv.get(k) for k in pset.values}
+    else:
+        spread = {k: pset.uncertainty_sigma(k) for k in pset.values}
+
+    if not spread or all(not spread.get(k) for k in pset.values):
         return None
 
     out = {}
     for name, value in pset.values.items():
         sigma = spread.get(name)
         if sigma:
-            # Log-normal perturbation: keeps volumes and clearances positive.
+            # Log-normal perturbation: keeps volumes, clearances and the weight
+            # exponents positive, and reproduces the asymmetry of a bootstrap
+            # interval on a ratio-scale parameter.
             out[name] = float(value * np.exp(rng.normal(0.0, sigma)))
         else:
             out[name] = float(value)
     return out
+
+
+def uncertainty_provenance(model_key: str) -> Dict[str, str]:
+    """Which published quantity each parameter's uncertainty came from."""
+    pset = core.MODEL_PARAMETERS[core.canonical_model_name(model_key)]
+    return {name: pset.uncertainty_basis(name) for name in pset.values}
 
 
 @dataclass
@@ -440,37 +456,33 @@ class UncertaintyReport:
     available: bool
     reason: str
     draws: Optional[pd.DataFrame] = None
+    provenance: Optional[Dict[str, str]] = None
 
 
 def parameter_uncertainty(spec: CohortSpec, model_name: str, *, seed: int,
                           n_draws: int = 200, n_sim: int = 500,
-                          source: str = "rse",
+                          source: str = "estimate",
                           allow_iiv_proxy: bool = False,
                           **kwargs) -> UncertaintyReport:
     """Re-calibrate k with the published PK parameters resampled each draw.
 
     This is the analysis EB-2 describes as the single most substantial addition:
     it answers "how much does k move if the published model parameters are only
-    known to their reported precision?", which the sampling-precision interval
-    does not address at all.
+    known to their reported precision?", which the Monte Carlo sampling-precision
+    interval does not address at all.
+
+    For Delavenne the draw includes the weight exponent on clearance (0.767,
+    29% RSE). Because that covariate is centred on 70 kg, its contribution is
+    exactly zero at the canonical cohort's IBW and grows towards the ends of the
+    weight grid -- so it moves the boundary and transportability results (EB-4)
+    rather than the headline interval.
     """
     key = core.canonical_model_name(model_name)
     pset = core.MODEL_PARAMETERS[key]
 
     effective_source = source
     probe = _draw_parameter_overrides(key, np.random.default_rng(0), source)
-    if probe is None and source == "rse":
-        if not allow_iiv_proxy:
-            return UncertaintyReport(
-                model=key, source=source, available=False,
-                reason=(
-                    f"No %RSE recorded for {pset.name}. Transcribe the reported "
-                    "relative standard errors into MODEL_PARAMETERS, or re-run "
-                    "with allow_iiv_proxy=True to substitute interindividual "
-                    "variability (which overstates parameter uncertainty and "
-                    "must be described as such)."
-                ),
-            )
+    if probe is None and source == "estimate" and allow_iiv_proxy:
         effective_source = "iiv"
         probe = _draw_parameter_overrides(key, np.random.default_rng(0), "iiv")
 
@@ -494,12 +506,17 @@ def parameter_uncertainty(spec: CohortSpec, model_name: str, *, seed: int,
         row.update({f"param_{k}": v for k, v in overrides.items()})
         rows.append(row)
 
+    bases = uncertainty_provenance(key)
+    if effective_source == "iiv":
+        reason = ("interindividual variability used as a proxy for parameter "
+                  "uncertainty; this overstates it and must be described as such")
+    else:
+        used = sorted(set(bases.values()) - {"not reported"})
+        reason = "; ".join(used)
+
     return UncertaintyReport(
         model=key, source=effective_source, available=True,
-        reason=("relative standard error of the published estimates"
-                if effective_source == "rse"
-                else "interindividual variability used as a proxy for parameter uncertainty"),
-        draws=pd.DataFrame(rows),
+        reason=reason, draws=pd.DataFrame(rows), provenance=bases,
     )
 
 

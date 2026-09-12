@@ -65,19 +65,6 @@ CANONICAL_COHORTS: Dict[str, CohortSpec] = {
         t_on_mean=65.0, t_on_sd=18.0,
         population="adult",
     ),
-    # Paediatric counterpart for the Jia model (EB-4, R1 p11 L46).
-    # AUTHOR DECISION REQUIRED: these are defensible defaults for a mixed
-    # paediatric cardiac-surgical population, not values taken from the Jia
-    # publication. Confirm or replace them before resubmission.
-    "paediatric": CohortSpec(
-        name="paediatric_10kg",
-        dose_per_kg=400.0, prime_heparin=1500.0,
-        ibw_mean=10.0, ibw_sd=4.0,
-        t_to_mean=10.0, t_to_sd=3.0,
-        t_on_mean=90.0, t_on_sd=30.0,
-        population="paediatric",
-        ibw_min=2.5, ibw_max=60.0,
-    ),
 }
 
 DEFAULT_COHORT = "grid_snapped"
@@ -98,22 +85,23 @@ ADULT_GRID = {
     "time_on_cpb": [30, 60, 90, 120],                           # min
 }
 
-# Paediatric space for the Jia model. AUTHOR DECISION REQUIRED -- see above.
-PAEDIATRIC_GRID = {
-    "dose_per_kg": [300, 350, 400],
-    "ibw": [3, 6, 10, 20, 40],
-    "prime": [0, 1000, 2500],
-    "time_to_cpb": [5, 15, 25],
-    "time_on_cpb": [30, 60, 90, 120, 180],
-}
+# There is no paediatric grid. The manuscript described Jia as a paediatric
+# model and EB-4 asked for it to be analysed in a paediatric parameter space,
+# but the source is an adult cardiac-surgical study in a relatively small-bodied
+# population: Vc 3.04 L, within 2% of Delavenne's adult 3.1 L, where a 10 kg
+# child would be near 0.4 L. All six models are therefore calibrated on the
+# single adult grid, and the small-bodied population Jia was derived in is
+# covered by the transportability evaluation below rather than by a separate
+# grid.
 
 
-def grid_for(population: str) -> Dict[str, Sequence[float]]:
-    if population == "paediatric":
-        return PAEDIATRIC_GRID
-    if population == "adult":
-        return ADULT_GRID
-    raise ValueError(f"population must be 'adult' or 'paediatric', got {population!r}")
+def grid_for(population: str = "adult") -> Dict[str, Sequence[float]]:
+    if population != "adult":
+        raise ValueError(
+            f"Only the adult grid exists; got population={population!r}. All six "
+            "reference models are adult, Jia included."
+        )
+    return ADULT_GRID
 
 
 def full_range_cohort(population: str = "adult") -> pd.DataFrame:
@@ -168,29 +156,25 @@ SHIFTED_INSTITUTIONS: Dict[str, CohortSpec] = {
         "slow_start", 400.0, 5000.0, 70.0, 10.0, 35.0, 8.0, 60.0, 15.0),
     "wide_case_mix": CohortSpec(
         "wide_case_mix", 400.0, 5000.0, 75.0, 20.0, 20.0, 10.0, 75.0, 35.0),
+    # Matches the body size of the population the Jia model was derived in, and
+    # is the honest form of the question R1 p11 L46 was asking: not "does the
+    # paediatric model work in children" but "does a constant calibrated in a
+    # 70 kg population transport to a materially lighter adult one".
+    "small_bodied_adults": CohortSpec(
+        "small_bodied_adults", 400.0, 5000.0, 58.0, 8.0, 15.0, 3.75, 60.0, 15.0,
+        ibw_min=35.0, ibw_max=90.0),
 }
-
-PAEDIATRIC_INSTITUTIONS: Dict[str, CohortSpec] = {
-    "neonatal": CohortSpec(
-        "neonatal", 400.0, 1000.0, 3.5, 0.8, 8.0, 2.0, 120.0, 40.0,
-        population="paediatric", ibw_min=2.0, ibw_max=10.0),
-    "infant": CohortSpec(
-        "infant", 400.0, 1500.0, 7.0, 2.0, 10.0, 3.0, 100.0, 35.0,
-        population="paediatric", ibw_min=3.0, ibw_max=20.0),
-    "older_child": CohortSpec(
-        "older_child", 350.0, 2500.0, 25.0, 8.0, 12.0, 4.0, 80.0, 30.0,
-        population="paediatric", ibw_min=10.0, ibw_max=60.0),
-}
-
 
 def institutions_for(population: str = "adult") -> Dict[str, CohortSpec]:
-    return PAEDIATRIC_INSTITUTIONS if population == "paediatric" else SHIFTED_INSTITUTIONS
+    """Shifted institutions. ``population`` is retained for call compatibility."""
+    grid_for(population)
+    return SHIFTED_INSTITUTIONS
 
 
 def describe_grids() -> str:
     """Methods-ready description of the calibration grid (EB-8)."""
     lines = []
-    for label, g in (("Adult", ADULT_GRID), ("Paediatric (Jia)", PAEDIATRIC_GRID)):
+    for label, g in (("Adult", ADULT_GRID),):
         n = 1
         for v in g.values():
             n *= len(v)
