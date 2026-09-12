@@ -1,0 +1,7 @@
+model,available,uncertainty_source,note,k_mean,k_median,k_sd,k_p2_5,k_p97_5,half_life_min,n
+delavenne,True,iiv,interindividual variability used as a proxy for parameter uncertainty,0.0106037766545727,0.010675281075746829,0.0013243985374758137,0.008277218478312667,0.012964986848592026,65.36795362065997,200.0
+jia,True,iiv,interindividual variability used as a proxy for parameter uncertainty,0.007345658917854725,0.0072918015311111955,0.0014775987004634534,0.004645505866159739,0.010205389819134285,94.36147094648612,200.0
+lanoiselee,True,iiv,interindividual variability used as a proxy for parameter uncertainty,0.007129891032491596,0.007143734640371591,0.0010628215706463273,0.005144699749393103,0.00912567433295237,97.2170791111964,200.0
+meesters,False,iiv,Meesters is a closed-form expression published without parameter uncertainty; no interval can be propagated for it.,,,,,,,
+prodose,False,iiv,PRODOSE is a closed-form expression published without parameter uncertainty; no interval can be propagated for it.,,,,,,,
+prodose-2,False,iiv,PRODOSE-2 is a closed-form expression published without parameter uncertainty; no interval can be propagated for it.,,,,,,,

@@ -1,0 +1,395 @@
+{
+  "generated_utc": "2026-09-12T16:57:32.359490+00:00",
+  "analysis_version": "2.0.0",
+  "core_version": "2.0.0",
+  "calibration_version": "2.0.0",
+  "seed": 20260912,
+  "seed_streams": {
+    "calibration": 1,
+    "test_cohort": 2,
+    "monte_carlo": 3,
+    "parameter_uncertainty": 4,
+    "objective_sensitivity": 5,
+    "input_sensitivity": 6,
+    "prime_timing": 7,
+    "institutions": 8,
+    "correlated": 9,
+    "paediatric": 10,
+    "loa_weight": 11,
+    "evaluation_mode": 12
+  },
+  "command_line": "run_analysis.py --seed 20260912 --outdir outputs/frozen --allow-iiv-proxy",
+  "git": {
+    "commit": "def13e579f30c31fb7db705c568188dc4839220e",
+    "short_commit": "def13e5",
+    "branch": "claude/manuscript-revision-code-j9hc9b",
+    "describe": "def13e5-dirty",
+    "dirty": true
+  },
+  "software_versions": {
+    "python": "3.11.15",
+    "platform": "Linux-6.18.44-fc-v24-x86_64-with-glibc2.39",
+    "numpy": "2.4.6",
+    "scipy": "1.17.1",
+    "pandas": "3.0.5",
+    "matplotlib": "3.11.2",
+    "streamlit": "not installed in the analysis environment",
+    "pynomo": "not installed in the analysis environment"
+  },
+  "decisions": {
+    "canonical_cohort": "grid_snapped",
+    "canonical_cohort_spec": {
+      "name": "grid_snapped_70_15_60",
+      "dose_per_kg": 400.0,
+      "prime_heparin": 5000.0,
+      "ibw_mean": 70.0,
+      "ibw_sd": 10.0,
+      "t_to_mean": 15.0,
+      "t_to_sd": 3.75,
+      "t_on_mean": 60.0,
+      "t_on_sd": 15.0,
+      "population": "adult",
+      "ibw_min": 1.0,
+      "ibw_max": 250.0
+    },
+    "sign_convention": "Difference = reference model - nomogram (positive = nomogram under-estimates)",
+    "evaluation_mode": "reversal_endpoint",
+    "evaluation_mode_meaning": "One point per patient: residual heparin at the reversal timepoint t = time to CPB + time on CPB. This is what the submitted analysis calibrated against; with it, the manuscript may claim agreement in residual amount at reversal, NOT reproduction of entire trajectories.",
+    "prime_timing": "lumped_t0",
+    "clinical_threshold_iu": 1000.0,
+    "clinical_threshold_pct": 10.0,
+    "clinical_threshold_rationale": "one 10 mg protamine increment at a 1 mg : 100 IU ratio",
+    "k_search_bounds": [
+      0.001,
+      0.03
+    ],
+    "k_search_bounds_note": "k restricted to 0.001-0.03 /min, i.e. an apparent half-life of 23 to 693 min",
+    "primary_objective": "bland_altman",
+    "objective_definition": "|bias| + 0.1 x LoA width (primary)",
+    "jia_run_in_paediatric_space": true,
+    "jia_allometric_scaling": false,
+    "iiv_substituted_for_missing_rse": true
+  },
+  "sample_sizes": {
+    "n_sim_per_calibration": 1000,
+    "n_test_cohort": 1000,
+    "n_monte_carlo_replicates": 500,
+    "n_parameter_draws": 200,
+    "ofat_variation": 0.2,
+    "topup_horizon_min": 240.0
+  },
+  "parameter_provenance": {
+    "lanoiselee": {
+      "source": "Lanoiselee et al. Br J Anaesth 2026;136(3):847-855 (doi 10.1016/j.bja.2025.11.057)",
+      "values": {
+        "Cl": 25.003,
+        "Vc": 4011.12,
+        "Vp": 1458.59,
+        "Q": 4.792833333333333
+      },
+      "iiv": {
+        "Cl": 0.0983,
+        "Vc": 0.111,
+        "Vp": 0.395,
+        "Q": 0.21
+      },
+      "rse": {
+        "Cl": null,
+        "Vc": null,
+        "Vp": null,
+        "Q": null
+      },
+      "weight_covariate": false,
+      "notes": "Fixed population parameters; the published model carries no weight covariate, so IBW affects the bolus size only, not the kinetics. RSE must be transcribed from the source publication before the parameter-uncertainty interval can be reported (EB-2). NOTE: the submitted code held two spellings of Q -- 4.7928 mL/min in the endpoint model and 287.57/60 = 4.79283 mL/min in the credible-interval simulation. The unrounded value is used throughout here; the difference is about 0.02 IU at the reversal timepoint.",
+      "missing_rse": [
+        "Cl",
+        "Vc",
+        "Vp",
+        "Q"
+      ]
+    },
+    "delavenne": {
+      "source": "Delavenne et al.",
+      "values": {
+        "Cl_L_h": 0.841,
+        "Vc_L": 3.1,
+        "Vp_L": 2.23,
+        "Q_L_h": 4.67
+      },
+      "iiv": {
+        "Cl_L_h": 0.221,
+        "Vc_L": 0.119,
+        "Vp_L": 0.0,
+        "Q_L_h": 0.0
+      },
+      "rse": {
+        "Cl_L_h": null,
+        "Vc_L": null,
+        "Vp_L": null,
+        "Q_L_h": null
+      },
+      "weight_covariate": true,
+      "notes": "Vc scales with weight (exponent 1.0) and Cl with weight (exponent 0.767). The published model is driven by ACTUAL body weight; the pipeline passes IBW, which is a documented approximation (EB-1). Vp and Q have no reported IIV and are held fixed.",
+      "missing_rse": [
+        "Cl_L_h",
+        "Vc_L",
+        "Vp_L",
+        "Q_L_h"
+      ]
+    },
+    "jia": {
+      "source": "Jia et al. (paediatric cardiac surgery)",
+      "values": {
+        "Cl_L_h": 1.18,
+        "Vc_L": 3.04,
+        "Vp_L": 8.01,
+        "Q_L_h": 0.171
+      },
+      "iiv": {
+        "Cl_L_h": 0.176,
+        "Vc_L": 0.114,
+        "Vp_L": 0.111,
+        "Q_L_h": 0.0573
+      },
+      "rse": {
+        "Cl_L_h": null,
+        "Vc_L": null,
+        "Vp_L": null,
+        "Q_L_h": null
+      },
+      "weight_covariate": false,
+      "notes": "UNVERIFIED IIV -- resolve against the source publication before resubmission. The implementation carries NO weight covariate, so a 5 kg neonate and a 70 kg adult are given identical kinetics; a paediatric parameter space (EB-4) is only meaningful once this is settled. See allometric_jia_params().",
+      "missing_rse": [
+        "Cl_L_h",
+        "Vc_L",
+        "Vp_L",
+        "Q_L_h"
+      ]
+    },
+    "prodose": {
+      "source": "PRODOSE nomogram (published closed-form expression)",
+      "values": {
+        "fast_fraction": 0.1,
+        "k_fast": 0.0693,
+        "t_half_intercept": 26.0,
+        "t_half_slope": 0.323
+      },
+      "iiv": {},
+      "rse": {},
+      "weight_covariate": true,
+      "notes": "Closed-form biexponential; the half-life of the slow pool depends on IU/kg.",
+      "missing_rse": [
+        "fast_fraction",
+        "k_fast",
+        "t_half_intercept",
+        "t_half_slope"
+      ]
+    },
+    "prodose-2": {
+      "source": "PRODOSE-2 (revised closed-form expression with circuit dilution)",
+      "values": {
+        "fast_fraction": 0.1,
+        "k_fast": 0.2847,
+        "t_half_intercept": 52.44,
+        "t_half_slope": 0.2968,
+        "v_prime_mL": 1500.0,
+        "reinfusion": 1.0
+      },
+      "iiv": {},
+      "rse": {},
+      "weight_covariate": true,
+      "notes": "Slow-pool elimination is scaled by the circuit dilution factor EBV/(EBV+prime volume).",
+      "missing_rse": [
+        "fast_fraction",
+        "k_fast",
+        "t_half_intercept",
+        "t_half_slope",
+        "v_prime_mL",
+        "reinfusion"
+      ]
+    },
+    "meesters": {
+      "source": "Meesters et al.",
+      "values": {
+        "fast_fraction": 0.1,
+        "k_fast": 0.0693,
+        "t_half_slow": 250.0
+      },
+      "iiv": {},
+      "rse": {},
+      "weight_covariate": false,
+      "notes": "Fixed 250 min slow half-life; no weight or dose covariate.",
+      "missing_rse": [
+        "fast_fraction",
+        "k_fast",
+        "t_half_slow"
+      ]
+    }
+  },
+  "calibration_grids": {
+    "adult": {
+      "dose_per_kg": [
+        250,
+        300,
+        350,
+        400,
+        450,
+        500,
+        550,
+        600
+      ],
+      "ibw": [
+        40,
+        55,
+        70,
+        85,
+        100,
+        115
+      ],
+      "prime": [
+        0,
+        5000,
+        10000
+      ],
+      "time_to_cpb": [
+        5,
+        15,
+        25,
+        35
+      ],
+      "time_on_cpb": [
+        30,
+        60,
+        90,
+        120
+      ]
+    },
+    "paediatric": {
+      "dose_per_kg": [
+        300,
+        350,
+        400
+      ],
+      "ibw": [
+        3,
+        6,
+        10,
+        20,
+        40
+      ],
+      "prime": [
+        0,
+        1000,
+        2500
+      ],
+      "time_to_cpb": [
+        5,
+        15,
+        25
+      ],
+      "time_on_cpb": [
+        30,
+        60,
+        90,
+        120,
+        180
+      ]
+    }
+  },
+  "outstanding_author_decisions": [
+    {
+      "comment": "EB-2",
+      "action": "Transcribe the published %RSE for these parameters, or state that the parameter-uncertainty interval could not be propagated",
+      "detail": {
+        "lanoiselee": [
+          "Cl",
+          "Vc",
+          "Vp",
+          "Q"
+        ],
+        "delavenne": [
+          "Cl_L_h",
+          "Vc_L",
+          "Vp_L",
+          "Q_L_h"
+        ],
+        "jia": [
+          "Cl_L_h",
+          "Vc_L",
+          "Vp_L",
+          "Q_L_h"
+        ]
+      }
+    },
+    {
+      "comment": "EB-6",
+      "action": "Supply the expected values for the per-source benchmark checks",
+      "detail": [
+        {
+          "model": "lanoiselee",
+          "description": "Central-compartment amount 60 min after a 300 IU/kg bolus in a 70 kg adult"
+        },
+        {
+          "model": "delavenne",
+          "description": "Central-compartment amount 60 min after a 300 IU/kg bolus in a 70 kg adult"
+        },
+        {
+          "model": "jia",
+          "description": "Central-compartment amount 60 min after a 400 IU/kg bolus in a 10 kg child"
+        },
+        {
+          "model": "prodose",
+          "description": "Residual heparin for the worked example in the PRODOSE publication"
+        },
+        {
+          "model": "meesters",
+          "description": "Residual heparin for the worked example in the Meesters publication"
+        }
+      ]
+    },
+    {
+      "comment": "EB-4",
+      "action": "Confirm the paediatric parameter space for Jia",
+      "detail": {
+        "cohort": "paediatric_10kg: 400 IU/kg, prime 1500 IU, IBW 10+/-4 kg, time to CPB 10+/-3 min, time on CPB 90+/-30 min [paediatric]",
+        "grid": {
+          "dose_per_kg": [
+            300,
+            350,
+            400
+          ],
+          "ibw": [
+            3,
+            6,
+            10,
+            20,
+            40
+          ],
+          "prime": [
+            0,
+            1000,
+            2500
+          ],
+          "time_to_cpb": [
+            5,
+            15,
+            25
+          ],
+          "time_on_cpb": [
+            30,
+            60,
+            90,
+            120,
+            180
+          ]
+        },
+        "warning": "The Jia implementation carries no weight covariate, so kinetics are identical at 3 kg and 70 kg unless --jia-allometric is used."
+      }
+    },
+    {
+      "comment": "EB-1",
+      "action": "State the assumption under which central-compartment amount maps to a protamine dose",
+      "detail": "The pipeline reports PK central-compartment amount only; no pharmacodynamic (anti-Xa or ACT) layer is modelled."
+    }
+  ]
+}

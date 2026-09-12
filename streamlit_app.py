@@ -5,7 +5,19 @@ import matplotlib.pyplot as plt
 import math
 import pickle
 import itertools
-from Nomogram_Models import run_nomogram, prodose_dose, lanoiselee_dose, delavenne_dose, delavenne_response, jia_response, generate_v2_table_deterministic
+from Nomogram_Models import (
+    DEFAULT_SEED,
+    run_nomogram,
+    prodose_dose,
+    lanoiselee_dose,
+    delavenne_dose,
+    delavenne_response,
+    jia_response,
+    generate_v2_table_deterministic,
+)
+from nomogram_core import MODEL_PARAMETERS, reference_amount, reference_amount_with_topups
+from agreement import SIGN_CONVENTION_LABEL, difference
+from parameter_spaces import ADULT_GRID, PAEDIATRIC_GRID, describe_grids
 
 # ==========================================
 # LEGAL DISCLAIMER
@@ -13,7 +25,7 @@ from Nomogram_Models import run_nomogram, prodose_dose, lanoiselee_dose, delaven
 st.warning("""
 **⚠️ STRICTLY FOR RESEARCH AND EDUCATIONAL USE ONLY**
 
-This application is an experimental informatics pipeline and technical proof-of-concept. It is **NOT** a medical device, nor has it been cleared, approved, or evaluated by the U.S. Food and Drug Administration (FDA), the European Medicines Agency (EMA), or any other regulatory authority under the EU Medical Device Regulation (MDR) or equivalent frameworks. 
+This application is an experimental informatics pipeline and technical proof-of-concept. It has **not** been cleared, approved, or evaluated by the U.S. Food and Drug Administration (FDA), the European Medicines Agency (EMA), or any other regulatory authority, and we make no claim about how it would be classified: using any output to derive a protamine dose may bring the tool within medical-device oversight, and that determination is jurisdiction-specific and is not one we attempt to make here. 
 
 The predictive models, nomograms, and calculations provided by this software are strictly for educational and research purposes. They must **never** be used for clinical decision-making, patient care, or to dictate drug dosages. The user assumes all liability and risk associated with the use of this software. By continuing to use this application, you acknowledge and agree to these terms.
 """)
@@ -79,15 +91,26 @@ for key, val in DEFAULTS.items():
     if key not in st.session_state:
         st.session_state[key] = val
 
-# Use these exact lists in both files
-heparin_grid = [250, 300, 350, 400, 450, 500, 550, 600]
-ibw_grid      = [40, 55, 70, 85, 100, 115]
-time_to_grid  = [5, 15, 25, 35] 
-time_on_grid  = [30, 60, 90, 120]
-prime_grid    = [0, 5000, 10000]
+# The grids are defined once, in parameter_spaces, and imported here. They were
+# previously duplicated in both files under a comment reading "use these exact
+# lists in both files", which is a drift risk rather than a guarantee; the
+# Methods section now quotes parameter_spaces.describe_grids() (EB-8).
+heparin_grid = ADULT_GRID["dose_per_kg"]
+ibw_grid = ADULT_GRID["ibw"]
+time_to_grid = ADULT_GRID["time_to_cpb"]
+time_on_grid = ADULT_GRID["time_on_cpb"]
+prime_grid = ADULT_GRID["prime"]
 
 @st.cache_data
 def load_k_table(model_name):
+    """Load the pre-computed k lookup table for one reference model.
+
+    Tables written by the current generator carry a `__metadata__` entry
+    recording the seed, the grid, the sample size and the calibration
+    conventions used to build them. A table without that entry was produced by
+    the unseeded pipeline and cannot be reproduced, so it must not be used for
+    anything quoted in the manuscript (EB-6).
+    """
     filename = f"k_table_v2_{model_name.lower()}.pkl"
     try:
         with open(filename, "rb") as f:
@@ -95,124 +118,114 @@ def load_k_table(model_name):
     except FileNotFoundError:
         return None
 
+
+def table_metadata(table):
+    return (table or {}).get("__metadata__")
+
+
 def nearest(value, grid):
     return min(grid, key=lambda x: abs(x - value))
 
-def get_k_stats(hpkg, ibw_val, tto, ton, prime_val, table):
+
+def get_k_stats(hpkg, ibw_val, tto, ton, prime_val, table, model_name=None):
+    """Look up k for the nearest grid node.
+
+    Three problems in the submitted version are fixed here.
+
+    1. A missing table returned a hard-coded k of 0.007 with no warning at all.
+       No table was ever shipped for PRODOSE-2, so selecting that model silently
+       produced every figure at k = 0.007 instead of its calibrated value of
+       about 0.0042 -- a 67% error in the decay constant, invisible to the user.
+       There is now no silent fallback.
+
+    2. The grid was hard-coded to the adult one, so the paediatric Jia model was
+       snapped to adult weight nodes (EB-4). The grid is now read from the
+       table's own metadata.
+
+    3. Nodes whose calibration ran into the k search bound were returned without
+       comment; they are now flagged, because a value sitting on a bound is an
+       artefact of the bound rather than an optimum (R1 p9 L29).
+    """
     if table is None:
-        return {'mu': 0.007, 'lo': 0.006, 'hi': 0.008}
-    
-    # 1. Force values to the nearest grid point used during generation
-    hpkg_n  = nearest(hpkg, heparin_grid)
-    ibw_n   = nearest(ibw_val, ibw_grid)
-    tto_n   = nearest(tto, time_to_grid)
-    ton_n   = nearest(ton, time_on_grid)
-    prime_n = nearest(prime_val, prime_grid)
-    
-    lookup_key = (hpkg_n, ibw_n, tto_n, ton_n, prime_n)
+        st.error(
+            f"No lookup table found for {model_name or 'this model'} "
+            f"(expected k_table_v2_{(model_name or '').lower()}.pkl). "
+            "Use 'Regenerate Lookup Tables' in the sidebar. No default decay "
+            "constant is substituted: a wrong k would propagate silently into "
+            "every figure on this page."
+        )
+        st.stop()
+
+    meta = table_metadata(table)
+    grid = meta["grid"] if meta else {
+        "dose_per_kg": heparin_grid, "ibw": ibw_grid,
+        "time_to_cpb": time_to_grid, "time_on_cpb": time_on_grid,
+        "prime": prime_grid,
+    }
+
+    lookup_key = (
+        nearest(hpkg, grid["dose_per_kg"]),
+        nearest(ibw_val, grid["ibw"]),
+        nearest(tto, grid["time_to_cpb"]),
+        nearest(ton, grid["time_on_cpb"]),
+        nearest(prime_val, grid["prime"]),
+    )
     stats = table.get(lookup_key)
-    
-    if stats:
-        return stats
-    else:
-        # If we reach here, the table exists but this specific combo isn't in it
-        st.error(f"Entry missing for key: {lookup_key}")
-        return {'mu': 0.007, 'lo': 0.006, 'hi': 0.008}
+    if stats is None:
+        st.error(
+            f"The lookup table for {model_name or 'this model'} has no entry for "
+            f"{lookup_key}. Regenerate the tables before using these values."
+        )
+        st.stop()
 
-# Wrapper to get remaining amount from the REFERENCE model for plotting
-def get_reference_remaining(model_name, t, bolus, prime, ibw, t_to, t_on):
-    # This function returns remaining amount at time t (where t is total time from bolus)
-    # The helper functions in Nomogram_130 return FINAL dose remaining after t_to + t_on.
-    # We need a trajectory function.
-    
-    if model_name == "PRODOSE":
-        # Prodose trajectory logic
-        k2 = 0.693 / (26 + 0.323 * (bolus / ibw))
-        if t <= t_to:
-            term1 = bolus * 0.1 * math.exp(-0.0693 * t)
-            term2 = bolus * 0.9 * math.exp(-k2 * t)
-            return term1 + term2
-        else:
-            t_on_curr = t - t_to
-            term1 = bolus * 0.1 * math.exp(-0.0693 * t)
-            term2 = bolus * 0.9 * math.exp(-k2 * t)
-            # Prime added at t_to, decays for t_on_curr
-            term3 = prime * math.exp(-k2 * t_on_curr)
-            return term1 + term2 + term3
-    
-    elif model_name == "PRODOSE-2":
-        # PRODOSE-2 trajectory logic (assumes 1500 mL prime, reinfusion = 1.0)
-        v_prime_mL = 1500.0
-        k1 = 0.2847
-        
-        k2_base = 0.693 / (52.44 + 0.2968 * (bolus / ibw))
-        ebv = ibw * 70  # Estimated Blood Volume
-        v_factor = ebv / (ebv + v_prime_mL)
-        k2_cpb = k2_base * v_factor
-        
-        if t <= t_to:
-            # Phase 1: Before CPB prime is added. Decay purely relies on time 't'
-            pool_fast = bolus * 0.10 * math.exp(-k1 * t)
-            pool_slow = bolus * 0.90 * math.exp(-k2_cpb * t)
-            return pool_fast + pool_slow
-            
-        else:
-            # Phase 2: On CPB. 
-            t_on_curr = t - t_to # Time elapsed SINCE the prime was added
-            
-            # Fast pool is unaffected by prime, decays for total time 't'
-            pool_fast = bolus * 0.10 * math.exp(-k1 * t)
-            
-            # Slow pool at the exact moment CPB starts
-            slow_at_cpb_start = bolus * 0.90 * math.exp(-k2_cpb * t_to)
-            
-            # Add the prime to the slow pool, then decay it for the time ON pump
-            pool_slow = (slow_at_cpb_start + prime) * math.exp(-k2_cpb * t_on_curr)
-            
-            return pool_fast + pool_slow
-    
-    elif model_name == "Meesters":
-        k2 = 0.693 / 250
-        if t <= t_to:
-            term1 = bolus * 0.1 * math.exp(-0.0693 * t)
-            term2 = bolus * 0.9 * math.exp(-k2 * t)
-            return term1 + term2
-        else:
-            t_on_curr = t - t_to
-            term1 = bolus * 0.1 * math.exp(-0.0693 * t)
-            term2 = bolus * 0.9 * math.exp(-k2 * t)
-            # Prime added at t_to, decays for t_on_curr
-            term3 = prime * math.exp(-k2 * t_on_curr)
-            return term1 + term2 + term3
+    k_lo_bound, k_hi_bound = (meta["k_search_bounds"] if meta else (0.001, 0.03))
+    if (max(stats["mu"], stats["hi"]) >= k_hi_bound - 1e-6
+            or min(stats["mu"], stats["lo"]) <= k_lo_bound + 1e-6):
+        st.warning(
+            f"At this grid node the calibration for {model_name or 'this model'} "
+            f"reached the edge of the k search interval "
+            f"({k_lo_bound}-{k_hi_bound} /min). The value shown is the boundary, "
+            "not an optimum, and should not be quoted."
+        )
 
-    elif model_name == "Lanoiselee":
-        # Lanoiselee trajectory logic
-        # Nomogram_130 has lanoiselee_response(dose, t)
-        from Nomogram_Models import lanoiselee_response
-        
-        val_bolus = lanoiselee_response(bolus, t)
-        val_prime = 0.0
-        if t > t_to:
-            val_prime = lanoiselee_response(prime, t - t_to)
-            
-        return val_bolus + val_prime
-      
-    elif model_name == "Delavenne":
-        # Uses delavenne_response which handles weight covariates
-        val_bolus = delavenne_response(bolus, t, ibw)
-        val_prime = 0.0
-        if t > t_to:
-            val_prime = delavenne_response(prime, t - t_to, ibw)
-        return val_bolus + val_prime
-    
-    elif model_name == "Jia":
-        val_bolus = jia_response(bolus, t, ibw)
-        val_prime = 0.0
-        if t > t_to:
-            val_prime = jia_response(prime, t - t_to, ibw)
-        return val_bolus + val_prime
-      
-    return 0.0
+    return stats
+
+
+def describe_k_table(table, model_name):
+    """Provenance line for the lookup table currently in use (EB-6)."""
+    meta = table_metadata(table)
+    if not meta:
+        return (f":warning: The {model_name} lookup table carries no provenance "
+                "record, so it was produced by the unseeded pipeline and cannot "
+                "be reproduced. Regenerate it before quoting any value from it.")
+    return (
+        f"{model_name} table: seed {meta['seed']}, {meta['n_sim']} simulated "
+        f"patients per node, {meta['population']} grid, calibration endpoint "
+        f"`{meta['evaluation_mode']}`, prime timing `{meta['prime_timing']}`, "
+        f"built with {meta['app_version']}. The lo/hi entries are "
+        f"{meta['lo_hi_meaning']}."
+    )
+
+
+# Wrapper to get the remaining amount from the REFERENCE model for plotting.
+#
+# The submitted version reimplemented every model's trajectory here, alongside a
+# separate endpoint implementation in Nomogram_Models. Two copies of the same
+# equations can drift apart silently, and the manuscript then has no single
+# definition to quote. Both now come from nomogram_core, and the test suite
+# asserts that the trajectory evaluated at t = t_to + t_on equals the endpoint
+# (EB-6).
+def get_reference_remaining(model_name, t, bolus, prime, ibw, t_to, t_on=None):
+    """Reference-model central-compartment amount (IU) at absolute time t (min).
+
+    Prime heparin enters the circulation at CPB onset, t = t_to, and therefore
+    decays only for the duration of bypass; the systemic bolus enters at t = 0.
+    That convention is stated once, in nomogram_core, and applies to every
+    model (EB-5). `t_on` is accepted for call compatibility and is not used --
+    the trajectory depends on the absolute time, not on the planned duration.
+    """
+    return reference_amount(model_name, t, bolus, prime, ibw, t_to)
+
 
 def lanoiselee_model(y, t, Cl, Vc, Vp, Q):
     AcH, ApH = y
@@ -220,10 +233,22 @@ def lanoiselee_model(y, t, Cl, Vc, Vp, Q):
     dApH = Q * (AcH / Vc - ApH / Vp)
     return [dAcH, dApH]
   
-def get_lanoiselee_cri(initial_bolus, additional_boluses, n_pat=250):
-    """
+@st.cache_data(show_spinner=False)
+def get_lanoiselee_cri(initial_bolus, additional_boluses, n_pat=250, seed=DEFAULT_SEED):
+    """Interindividual-variability band for the Lanoiselee model.
+
     additional_boluses: list of tuples [(time, dose), ...]
+
+    `seed` makes the band reproducible: the submitted version drew from the
+    unseeded global np.random, so the band moved on every rerun and no reported
+    interval could be reproduced (EB-6).
+
+    The band describes spread BETWEEN simulated patients under the published
+    interindividual variability. It is not uncertainty in the published
+    parameter estimates themselves -- see parameter_uncertainty() in
+    calibration.py for that (EB-2).
     """
+    rng = np.random.default_rng(seed)
     # Population Means (from your R script)
     pop_params = {
         'Cl': 1500.18 / 60,
@@ -231,8 +256,9 @@ def get_lanoiselee_cri(initial_bolus, additional_boluses, n_pat=250):
         'Vp': 1458.59,
         'Q': 287.57 / 60
     }
-    # Variability (Omegas)
-    omega = np.array([0.0983, 0.111, 0.395, 0.21])
+    # Variability (omega SDs), read from the single parameter record.
+    _iiv = MODEL_PARAMETERS["lanoiselee"].iiv
+    omega = np.array([_iiv["Cl"], _iiv["Vc"], _iiv["Vp"], _iiv["Q"]])
     
     times = np.linspace(0, 120, 121)
     all_sims = np.zeros((n_pat, len(times)))
@@ -244,7 +270,7 @@ def get_lanoiselee_cri(initial_bolus, additional_boluses, n_pat=250):
 
     for i in range(n_pat):
         # Apply Log-Normal variability
-        indiv_p = [val * np.exp(np.random.normal(0, omega[idx])) 
+        indiv_p = [val * np.exp(rng.normal(0, omega[idx]))
                    for idx, val in enumerate(pop_params.values())]
         
         # Initial state: [Central (AcH), Peripheral (ApH)]
@@ -301,15 +327,20 @@ def delavenne_ode_model(y, t, Cl, Vc, Vp, Q):
     dApH = Q * (AcH / Vc - ApH / Vp)
     return [dAcH, dApH]
 
-def get_delavenne_cri(initial_bolus, additional_boluses, patient_weight, n_pat=250):
+@st.cache_data(show_spinner=False)
+def get_delavenne_cri(initial_bolus, additional_boluses, patient_weight,
+                      n_pat=250, seed=DEFAULT_SEED):
+    """Interindividual-variability band for the Delavenne model.
+
+    Weight covariates on Vc (exponent 1.0) and Cl (exponent 0.767) are applied
+    before the random effects. Variability is taken from MODEL_PARAMETERS so
+    this function and the calibration cannot drift apart: Cl 0.221, Vc 0.119,
+    with Vp and Q held fixed because the source reports no IIV for them.
+
+    `seed` makes the band reproducible (EB-6); it is between-patient spread,
+    not uncertainty in the published estimates (EB-2).
     """
-    Simulates Delavenne model with Covariates (Weight) and Inter-patient Variability.
-    
-    Variability from table:
-    Vc: 0.119 (approx 11.9% variability on log scale)
-    Cl: 0.221 (approx 22.1% variability on log scale)
-    Vp, Q: Not listed (assumed fixed for this simulation)
-    """
+    rng = np.random.default_rng(seed)
     
     # 1. Calculate Population Means based on Covariates (Weight)
     # Convert to standard units (mL, mL/min)
@@ -318,10 +349,10 @@ def get_delavenne_cri(initial_bolus, additional_boluses, patient_weight, n_pat=2
     pop_Vp_mL = 2.23 * 1000.0
     pop_Q_mLmin = (4.67 * 1000.0) / 60.0
 
-    # 2. Variability (Omega)
-    # Order: [Cl, Vc, Vp, Q] to match loop assignment below
-    # Vp and Q have 0 noise based on the provided table
-    omega = np.array([0.221, 0.119, 0.0, 0.0])
+    # 2. Variability (omega SDs), order [Cl, Vc, Vp, Q] to match the loop below.
+    # Vp and Q carry no reported IIV and are held fixed.
+    _iiv = MODEL_PARAMETERS["delavenne"].iiv
+    omega = np.array([_iiv["Cl_L_h"], _iiv["Vc_L"], _iiv["Vp_L"], _iiv["Q_L_h"]])
     
     pop_params = [pop_Cl_mLmin, pop_Vc_mL, pop_Vp_mL, pop_Q_mLmin]
     
@@ -334,8 +365,8 @@ def get_delavenne_cri(initial_bolus, additional_boluses, patient_weight, n_pat=2
 
     for i in range(n_pat):
         # Apply Log-Normal variability
-        # If omega is 0, np.random.normal(0, 0) returns 0, so exp(0)=1 (No change)
-        indiv_p = [val * np.exp(np.random.normal(0, omega[idx])) 
+        # If omega is 0, rng.normal(0, 0) returns 0, so exp(0) = 1 (no change)
+        indiv_p = [val * np.exp(rng.normal(0, omega[idx]))
                    for idx, val in enumerate(pop_params)]
         
         curr_state = [initial_bolus, 0.0] 
@@ -378,21 +409,34 @@ def jia_ode_model(y, t, Cl, Vc, Vp, Q):
     dApH = Q * (AcH / Vc - ApH / Vp)
     return [dAcH, dApH]
 
-def get_jia_cri(initial_bolus, additional_boluses, patient_weight, n_pat=250):
+@st.cache_data(show_spinner=False)
+def get_jia_cri(initial_bolus, additional_boluses, patient_weight,
+                n_pat=250, seed=DEFAULT_SEED):
+    """Interindividual-variability band for the paediatric Jia model.
+
+    RESOLVED DISCREPANCY (EB-6): the submitted version's docstring gave the
+    variability as CL 0.176, Vc 0.114, Q 0.0573, Vp 0.111 while its code used
+    [0.073, 0.081, 0.144, 0.318] -- different numbers in a different order --
+    and additionally took their square root, so it treated them as variances
+    where the other two models treated theirs as standard deviations. The values
+    are now read from MODEL_PARAMETERS (the docstring set, as omega SDs, for
+    consistency with the other models) and are flagged UNVERIFIED there until
+    checked against the source publication.
+
+    Note also that the Jia implementation carries no weight covariate, so this
+    band is identical for a 3 kg neonate and a 70 kg adult (EB-4).
     """
-    Simulates Jia model with Inter-patient Variability (Omega).
-    Variability from table: 
-    CL: 0.176, Vc: 0.114, Q: 0.0573, Vp: 0.111
-    """
+    rng = np.random.default_rng(seed)
     # 1. Population Means (mL and mL/min)
     pop_Vc_mL = 3.04 * 1000.0
     pop_Cl_mLmin = (1.18 * 1000.0) / 60.0
     pop_Vp_mL = 8.01 * 1000.0
     pop_Q_mLmin = (0.171 * 1000.0) / 60.0
 
-    # 2. Variability (Omega) from the "IIV" column in your table
-    # Order: [Cl, Vc, Vp, Q]
-    omega = np.array([0.073, 0.081, 0.144, 0.318])
+    # 2. Variability (omega SDs), order [Cl, Vc, Vp, Q]. See the docstring:
+    # the submitted code and its own docstring disagreed on these values.
+    _iiv = MODEL_PARAMETERS["jia"].iiv
+    omega = np.array([_iiv["Cl_L_h"], _iiv["Vc_L"], _iiv["Vp_L"], _iiv["Q_L_h"]])
     pop_params = [pop_Cl_mLmin, pop_Vc_mL, pop_Vp_mL, pop_Q_mLmin]
     
     times = np.linspace(0, 120, 121)
@@ -403,7 +447,8 @@ def get_jia_cri(initial_bolus, additional_boluses, patient_weight, n_pat=250):
 
     for i in range(n_pat):
         # Apply Log-Normal variability to all 4 parameters
-        indiv_p = [val * np.exp(np.random.normal(0, np.sqrt(omega[idx]))) 
+        # omega entries are SDs, as for the other two models -- no square root.
+        indiv_p = [val * np.exp(rng.normal(0, omega[idx]))
                    for idx, val in enumerate(pop_params)]
         
         curr_state = [initial_bolus, 0.0] 
@@ -486,7 +531,9 @@ tab_compare, tab_clinical, tab_topup, tab_nomogram, tab_diagnostics = st.tabs(["
 
 # Load Table for selected model
 k_table = load_k_table(model_choice)
-k_stats = get_k_stats(h_base, ibw_base, t_to_base, t_on_base, p_base, k_table)
+k_stats = get_k_stats(h_base, ibw_base, t_to_base, t_on_base, p_base, k_table,
+                      model_name=model_choice)
+st.sidebar.caption(describe_k_table(k_table, model_choice))
 k_mu, k_lo, k_hi = k_stats['mu'], k_stats['lo'], k_stats['hi']
 
 with tab_compare:
@@ -756,8 +803,15 @@ with tab_clinical:
         res_simp_hi = pat_d0 * np.exp(-k_lo * pat_total_time)
         
         res_ref = ref_end
-        
-        diff = res_simp - res_ref
+
+        # ONE sign convention, defined in agreement.py and used everywhere:
+        # difference = reference model - nomogram, so a positive number means
+        # the nomogram reads LOW. The submitted dashboard computed
+        # (nomogram - reference) here while the Bland-Altman analysis computed
+        # (reference - nomogram), which is how the same result appeared as
+        # -5.5 IU in the manuscript body and +5.62 IU in the Figure 2 legend
+        # (EB-3, R1 Figure 2).
+        diff = difference(res_ref, res_simp)
         pct_err = (diff / res_ref) * 100 if res_ref > 0 else 0
         
         # Display Simplified Metric
@@ -769,7 +823,9 @@ with tab_clinical:
         if ref_cri:
             st.caption(f"95% CrI: {ref_cri} IU")
         
-        st.metric("Difference", f"{diff:+.0f} IU", f"{pct_err:.1f}%", delta_color="inverse")
+        st.metric("Difference (reference - nomogram)", f"{diff:+.0f} IU",
+                  f"{pct_err:.1f}%", delta_color="inverse")
+        st.caption(SIGN_CONVENTION_LABEL)
         
         st.markdown(f"""
         **Parameters Used:**
@@ -800,7 +856,8 @@ with tab_topup:
     
     # 2. Extract the exact 'k' used for the simplified model in the rest of the app
     k_table = load_k_table(model_choice)
-    k_stats = get_k_stats(h_base, ibw, t_to, t_on, prime, k_table)
+    k_stats = get_k_stats(h_base, ibw, t_to, t_on, prime, k_table,
+                          model_name=model_choice)
     k_mu = k_stats['mu']
     
     initial_total = initial_bolus + prime
@@ -821,33 +878,25 @@ with tab_topup:
     # Phase 2 decay (time axis reset to 0 for t_post)
     simp_phase2 = new_total_load * np.exp(-k_mu * t_post) 
     
-    # --- REFERENCE MODEL (Analytical Superposition Logic) ---
-    # Phase 1: Normal decay of initial bolus + prime
-    ref_phase1 = [get_reference_remaining(model_choice, t, initial_bolus, prime, ibw, t_to, t_on) for t in t_phase1]
-    
-    # Phase 2: Superposition of original doses + top-up
-    ref_phase2 = []
-    for t_abs in t_phase2:
-        # 1. Original dose continuing to decay naturally
-        orig_decay = get_reference_remaining(model_choice, t_abs, initial_bolus, prime, ibw, t_to, t_on)
-        
-        # 2. Top-up dose decay
-        time_since_topup = t_abs - t_topup
-        
-        if model_choice == "PRODOSE-2":
-            # PRODOSE-2 Top-up: Decays entirely in the slow compartment using k2_cpb
-            k2_base = 0.693 / (52.44 + 0.2968 * (initial_bolus / ibw))
-            v_prime_mL = st.session_state.get("v_prime_base", 1500.0)
-            ebv = ibw * 70
-            k2_cpb = k2_base * (ebv / (ebv + v_prime_mL))
-            
-            topup_decay = bolus_val * math.exp(-k2_cpb * time_since_topup)
-        else:
-            # Standard superposition for PRODOSE, Meesters, Lanoiselee, Delavenne, Jia
-            # This cleanly passes 'time_since_topup' as 't' into your _response formulas
-            topup_decay = get_reference_remaining(model_choice, time_since_topup, bolus_val, 0, ibw, 0, t_on)
-            
-        ref_phase2.append(orig_decay + topup_decay)
+    # --- REFERENCE MODEL (exact superposition) ---
+    #
+    # Superposition is exact for the models that are linear in dose. PRODOSE and
+    # PRODOSE-2 are not: they make the slow-pool half-life a function of IU/kg.
+    # The submitted code handled PRODOSE-2 with a hand-written special case but
+    # passed the top-up through the ordinary PRODOSE trajectory, which gave a
+    # 5,000 IU top-up in a 70 kg patient the elimination half-life of a
+    # 71 IU/kg induction dose instead of the patient's own. Both are now handled
+    # in one place, by holding the dose-dependent covariate at the index bolus
+    # (see nomogram_core.reference_amount_with_topups).
+    topups = ((float(t_topup), float(bolus_val)),)
+
+    ref_phase1 = [get_reference_remaining(model_choice, t, initial_bolus, prime, ibw, t_to)
+                  for t in t_phase1]
+    ref_phase2 = [
+        reference_amount_with_topups(model_choice, t_abs, initial_bolus, prime,
+                                     ibw, t_to, topups)
+        for t_abs in t_phase2
+    ]
 
     # 4. Plotting
     fig_topup, ax = plt.subplots(figsize=(10, 5))
@@ -873,12 +922,26 @@ with tab_topup:
     
     st.pyplot(fig_topup)
 
-    # 5. Concordance Output
-    final_simp = simp_phase2[-1]
-    final_ref = ref_phase2[-1]
-    error_pct = abs(final_simp - final_ref) / final_ref * 100 if final_ref > 0 else 0
-    
-    st.info(f"**Concordance Check:** 120 minutes post-top-up, the simplified nomogram reset method differs from the **{model_choice}** continuous model by **{error_pct:.1f}%**.")
+    # 5. Concordance output -- mean and worst case across the whole window, not
+    # just the final point (EB-5). The full size x timing x repeat grid is
+    # produced by topup.py and reported in the manuscript.
+    ref_arr = np.asarray(ref_phase2, dtype=float)
+    simp_arr = np.asarray(simp_phase2, dtype=float)
+    diff_arr = difference(ref_arr, simp_arr)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        pct_arr = np.where(ref_arr > 0, 100.0 * diff_arr / ref_arr, np.nan)
+    worst_i = int(np.nanargmax(np.abs(pct_arr)))
+    final_pct = pct_arr[-1]
+
+    st.info(
+        f"**Concordance check** (difference = {model_choice} minus nomogram). "
+        f"At the end of the plotted window the axis-reset estimate differs from "
+        f"the {model_choice} model by **{final_pct:+.1f}%** "
+        f"({diff_arr[-1]:+,.0f} IU). Across the whole post-top-up window the mean "
+        f"absolute divergence is **{np.nanmean(np.abs(pct_arr)):.1f}%** and the "
+        f"worst case is **{pct_arr[worst_i]:+.1f}%** "
+        f"({diff_arr[worst_i]:+,.0f} IU, at t = {t_phase2[worst_i]:.0f} min)."
+    )
 
 with tab_nomogram:
     st.subheader("Interactive Nomogram")
@@ -934,7 +997,12 @@ with tab_nomogram:
             # --- 1. Simplified Model Uncertainty Fan ---
             y_r_hi_p = 10 - (m_modulus * (np.log(pat_d0 * np.exp(-k_lo * pat_time)) - np.log(r_min)))
             y_r_lo_p = 10 - (m_modulus * (np.log(pat_d0 * np.exp(-k_hi * pat_time)) - np.log(r_min)))
-            ax2.fill([xl, xr, xr], [y_l_pat, y_r_lo_p, y_r_hi_p], color='tab:red', alpha=0.1, label="Simplified CrI")
+            # This fan spans the k values obtained at time-on-CPB -/+ 2 SD. It is
+            # a scenario range, not a credible interval, and it is a feature of
+            # this interactive tool only -- the printed nomogram carries no band
+            # (EB-2, EB-8).
+            ax2.fill([xl, xr, xr], [y_l_pat, y_r_lo_p, y_r_hi_p], color='tab:red',
+                     alpha=0.1, label="Nomogram scenario range")
             ax2.plot([xl, xr], [y_l_pat, y_r_mu_p], color='red', lw=1.2, zorder=5)
             
             # --- 2. Reference Model Uncertainty (Shaded Area on Axis) ---
@@ -1010,12 +1078,23 @@ with tab_nomogram:
         """)
     
 with tab_diagnostics:
-    st.info(f"Diagnostics will run using **{model_choice}** as the ground truth.")
+    # 'Ground truth' removed throughout: the published models are reference
+    # models used as the approximation target, not ground truth (EB-1, R1 p11 L51).
+    st.info(f"Diagnostics will run using **{model_choice}** as the reference model "
+            "(the approximation target, not ground truth). The comparison cohort is "
+            "an internal resample from the same assumed distributions, not an "
+            "external validation cohort.")
+    diag_seed = st.number_input(
+        "Random seed", value=int(DEFAULT_SEED), step=1,
+        help="Every simulation in the run is drawn from this seed, so the same "
+             "seed always reproduces the same constants, statistics and figures. "
+             "The seed is printed in the PDF footer and recorded with the results "
+             "(EB-6).")
     if st.button("Run Full Diagnostics & Generate PDF"):
         with st.spinner(f"Simulating against {model_choice}..."):
-            res = run_nomogram(h_base, t_to_base, p_base, ibw_base, ibw_sd, 
-                               t_to_sd, t_on_base, t_on_sd, 
-                               model_choice)
+            res = run_nomogram(h_base, t_to_base, p_base, ibw_base, ibw_sd,
+                               t_to_sd, t_on_base, t_on_sd,
+                               model_choice, seed=diag_seed)
             
             (pdf_path, k_best, bias, loa_low, loa_high, fig_ba, mean_k, ci_low, ci_high, 
              k_post_fig, scatter_fig, sim_df, summary_text, sens_df, sens_fig, tornado_fig, metadata, diagnostics) = res
@@ -1051,36 +1130,124 @@ with tab_diagnostics:
                 with plot_col2:
                     st.pyplot(scatter_fig)
 
-            with sub[2]: # Diagnostics - FIXED FORMATTING
-                st.subheader("Model Performance Metrics")
-                c1, c2 = st.columns(2)
-                with c1:
-                    st.metric("RMSE (IU)", f"{diagnostics['RMSE (IU)']:.2f}")
-                    st.metric("MAE (IU)", f"{diagnostics['MAE (IU)']:.2f}")
-                    st.metric("R² Score", f"{diagnostics['R²']:.3f}")
-                with c2:
-                    st.metric("Within ±5%", f"{diagnostics['% within ±5%']:.1f}%")
-                    st.metric("Within ±10%", f"{diagnostics['% within ±10%']:.1f}%")
+            with sub[2]: # Diagnostics
+                agreement = metadata["agreement"]
+                thr = metadata["threshold_iu"]
 
-            with sub[3]: # Uncertainty - FIXED TEXT
-                st.subheader("Bayesian Inference of k")
+                st.subheader("Approximation performance")
+                st.caption(metadata["sign_convention"].replace("_", " ") +
+                           " -- positive means the nomogram reads low")
+
+                c1, c2, c3 = st.columns(3)
+                with c1:
+                    st.markdown("**Absolute error (IU)**")
+                    st.metric("Bias", f"{agreement['bias']:+.1f}",
+                              help=f"95% CI {agreement['bias_ci_low']:+.1f} to "
+                                   f"{agreement['bias_ci_high']:+.1f}")
+                    st.metric("RMSE", f"{agreement['rmse_iu']:.1f}")
+                    st.metric("MAE", f"{agreement['mae_iu']:.1f}")
+                    st.metric("Largest", f"{agreement['max_abs_error_iu']:.0f}")
+                with c2:
+                    st.markdown("**Relative error (%)**")
+                    st.metric("Mean % error", f"{agreement['mean_pct_error']:+.2f}%")
+                    st.metric("MAPE", f"{agreement['mean_abs_pct_error']:.2f}%")
+                    st.metric("Median absolute",
+                              f"{agreement['median_abs_pct_error']:.2f}%")
+                    st.metric("Largest", f"{agreement['max_abs_pct_error']:.1f}%")
+                with c3:
+                    st.markdown("**Proportional bias and coverage**")
+                    st.metric("BA regression slope",
+                              f"{agreement['prop_bias_slope']:+.4f}",
+                              help="Regression of the difference on the mean. A "
+                                   "non-zero slope means the error varies "
+                                   "systematically with the residual load, which "
+                                   "a near-zero mean bias can hide entirely.")
+                    st.metric("Slope p-value", f"{agreement['prop_bias_slope_p']:.2g}")
+                    st.metric(f"Within {thr:,.0f} IU",
+                              f"{agreement['pct_within_threshold_iu']:.1f}%",
+                              help=f"{thr / 100:.0f} mg of protamine at a "
+                                   f"1 mg : 100 IU ratio")
+                    st.metric("Within 10%",
+                              f"{agreement['pct_within_threshold_pct']:.1f}%")
+
+                if agreement["prop_bias_significant"]:
+                    st.warning(
+                        f"Proportional bias is statistically detectable "
+                        f"(slope {agreement['prop_bias_slope']:+.4f}, "
+                        f"p = {agreement['prop_bias_slope_p']:.2g}): the predicted "
+                        f"difference runs from "
+                        f"{agreement['prop_bias_predicted_diff_at_p5']:+.0f} IU at the "
+                        f"low end of the range to "
+                        f"{agreement['prop_bias_predicted_diff_at_p95']:+.0f} IU at the "
+                        f"high end. The mean bias alone does not describe this."
+                    )
+
+                st.caption(
+                    f"R-squared = {agreement['descriptive_r_squared']:.3f}, reported as "
+                    "a descriptor of the scatter only. R-squared is not a measure of "
+                    "agreement and is not used as one."
+                )
+
+                st.subheader("Performance stratified by elapsed time and residual load")
+                st.dataframe(metadata["strata"], use_container_width=True)
+
+            with sub[3]: # Uncertainty
+                st.subheader("Monte Carlo sampling precision of k")
                 col1, col2 = st.columns(2)
 
                 with col1:
                     st.pyplot(k_post_fig, use_container_width=True)
-                
-                with col2:
-                    st.write(f"**Posterior Mean:** `{mean_k:.5f}`")
-                    st.write(f"**95% Credible Interval:** `[{ci_low:.5f}, {ci_high:.5f}]`")
 
-            with sub[4]: # Sensitivity - FIXED PLOTS
-                st.subheader("Parameter Sensitivity")
-                st.dataframe(sens_df)
+                with col2:
+                    st.write(f"**Decay constant used throughout:** `{k_best:.5f}` /min "
+                             f"(apparent half-life {np.log(2) / k_best:.0f} min)")
+                    st.write(f"**2.5th-97.5th percentile across replicate cohorts:** "
+                             f"`[{ci_low:.5f}, {ci_high:.5f}]`")
+                    st.warning(
+                        "This interval is **Monte Carlo sampling precision only**. It "
+                        "measures how precisely k is pinned down by a cohort of this "
+                        "size drawn from these fixed, investigator-specified "
+                        "distributions, with the published pharmacokinetic parameters "
+                        "held at their point estimates.\n\n"
+                        "It does **not** quantify uncertainty in those published "
+                        "parameters, in the institutional input estimates, in model "
+                        "selection, in the distributional assumptions, in structural "
+                        "misspecification, or in an individual patient's prediction. "
+                        "It is not a predicted margin of error and must not be read "
+                        "as one."
+                    )
+                    st.caption(
+                        "Previously labelled a bootstrap and a posterior: neither is "
+                        "accurate. No dataset is resampled and no prior is specified; "
+                        "a fresh synthetic cohort is simulated for each replicate. "
+                        "For uncertainty in the published parameters, see "
+                        "parameter_uncertainty() in calibration.py."
+                    )
+
+            with sub[4]: # Sensitivity
+                st.subheader(f"Input sensitivity, ±{metadata['variation']:.0%} "
+                             "one factor at a time")
+                st.dataframe(sens_df, use_container_width=True)
                 plot_col1, plot_col2 = st.columns(2)
                 with plot_col1:
                     st.pyplot(sens_fig)
                 with plot_col2:
                     st.pyplot(tornado_fig)
+
+                st.subheader("Robustness of k to the objective function")
+                st.caption(
+                    "The primary objective is |bias| + 0.1 × (limits-of-agreement "
+                    "width). The one-tenth weight is a choice, not a derived "
+                    "quantity, so k is re-derived here under RMSE, MAPE, MAE and an "
+                    "asymmetric clinical loss that penalises under-estimation of "
+                    "residual heparin 2:1."
+                )
+                st.dataframe(
+                    metadata["objectives"][["objective_label", "k", "half_life_min",
+                                            "pct_change_vs_primary"]],
+                    use_container_width=True)
+                spread = metadata["objectives"]["pct_change_vs_primary"].abs().max()
+                st.metric("Largest movement in k across objectives", f"{spread:.2f}%")
 
             with sub[5]: # Data
                 st.download_button("Download CSV", sim_df.to_csv(index=False).encode('utf-8'), "sim_data.csv")

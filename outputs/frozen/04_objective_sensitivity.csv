@@ -1,0 +1,31 @@
+model,objective,objective_label,k,half_life_min,at_bound,pct_change_vs_primary
+delavenne,bland_altman,|bias| + 0.1 x LoA width (primary),0.010455841402245558,66.2928169904223,False,0.0
+delavenne,rmse,Root mean squared error (IU),0.010281116786687979,67.41944430175468,False,-1.6710717850029273
+delavenne,mape,Mean absolute percentage error (%),0.010385231506843751,66.74354636227118,False,-0.6753152872674877
+delavenne,mae,Mean absolute error (IU),0.010336400960586304,67.05885183856378,False,-1.1423321860410272
+delavenne,asymmetric,"Asymmetric loss, under-estimation penalised 2:1",0.009850649338719273,70.36563344463386,False,-5.7880761599569714
+jia,bland_altman,|bias| + 0.1 x LoA width (primary),0.007153409794027585,96.89745177728487,False,0.0
+jia,rmse,Root mean squared error (IU),0.007159929353223722,96.80922064515333,False,0.09113918234601384
+jia,mape,Mean absolute percentage error (%),0.007164258845987752,96.7507170610025,False,0.1516626653938434
+jia,mae,Mean absolute error (IU),0.007164263267738679,96.75065734689697,False,0.15172447858579705
+jia,asymmetric,"Asymmetric loss, under-estimation penalised 2:1",0.007139418279763157,97.08734709166525,False,-0.19559223737063156
+lanoiselee,bland_altman,|bias| + 0.1 x LoA width (primary),0.007032073314220837,98.56939050368062,False,0.0
+lanoiselee,rmse,Root mean squared error (IU),0.0070354898711516255,98.52152348369246,False,0.04858534287291317
+lanoiselee,mape,Mean absolute percentage error (%),0.007036095218311755,98.5130472305148,False,0.05719371672057102
+lanoiselee,mae,Mean absolute error (IU),0.007038594507299919,98.47806686989333,False,0.0927349984519406
+lanoiselee,asymmetric,"Asymmetric loss, under-estimation penalised 2:1",0.007017324224038198,98.7765647460801,False,-0.20974027891336083
+meesters,bland_altman,|bias| + 0.1 x LoA width (primary),0.0038627717482653113,179.44295592179967,False,0.0
+meesters,rmse,Root mean squared error (IU),0.003835130449969483,180.7362721039804,False,-0.715581973183929
+meesters,mape,Mean absolute percentage error (%),0.0038211435049657246,181.39784063570855,False,-1.0776780512149378
+meesters,mae,Mean absolute error (IU),0.003831791874000554,180.8937445854203,False,-0.802011516177982
+meesters,asymmetric,"Asymmetric loss, under-estimation penalised 2:1",0.0037804385969544226,183.3509956009747,False,-2.13145266343689
+prodose,bland_altman,|bias| + 0.1 x LoA width (primary),0.005500712072714505,126.01044581086195,False,0.0
+prodose,rmse,Root mean squared error (IU),0.0054797172824232274,126.49323766817098,False,-0.38167404535531424
+prodose,mape,Mean absolute percentage error (%),0.005453726485801663,127.09606584864461,False,-0.8541728105695197
+prodose,mae,Mean absolute error (IU),0.005469991462382176,126.71814669671903,False,-0.5584842457890833
+prodose,asymmetric,"Asymmetric loss, under-estimation penalised 2:1",0.005425619837987775,127.75446884553858,False,-1.3651366174792936
+prodose-2,bland_altman,|bias| + 0.1 x LoA width (primary),0.004200463867684212,165.01681775972264,False,0.0
+prodose-2,rmse,Root mean squared error (IU),0.004183459675934562,165.687549122868,False,-0.40481699843841296
+prodose-2,mape,Mean absolute percentage error (%),0.004158617196128708,166.67732274208888,False,-0.9962392934134345
+prodose-2,mae,Mean absolute error (IU),0.004175204572609354,166.01514213392255,False,-0.6013453720953768
+prodose-2,asymmetric,"Asymmetric loss, under-estimation penalised 2:1",0.0041160660738035195,168.4004017747536,False,-2.009249371956198

@@ -1,3 +1,4 @@
+import hashlib
 import math
 import numpy as np
 from pynomo.nomographer import Nomographer
@@ -13,353 +14,172 @@ import pickle
 import itertools
 import pandas as pd
 
-APP_VERSION = "v1.2.0"
+APP_VERSION = "v2.0.0"
+
+# Every simulation in this module now takes an explicit seed. The submitted
+# version called the global np.random with no seed anywhere, so no two runs
+# produced the same cohort, the same k or the same agreement statistics -- which
+# is the root cause of the numbers that did not reconcile between the
+# manuscript body, Table 1 and the Figure 2 legend (EB-3, R1 Figure 2).
+DEFAULT_SEED = 20260912
 
 # ==========================================
 # MODEL DEFINITIONS
 # ==========================================
+#
+# The pharmacokinetics now live in nomogram_core, which imports neither
+# Streamlit nor PyNomo, so that every published number can be regenerated
+# head-lessly by run_analysis.py and checked by the test suite (EB-6). The
+# names below are re-exported unchanged, so existing callers are unaffected.
 
-def prodose_dose(heparin_bolus, heparin_prime, ibw, time_to_cpb, time_on_cpb):
-    """
-    PRODOSE formula.
-    All times in minutes, doses in IU, ibw in kg.
-    """
-    term1 = heparin_bolus * 0.1 * math.exp(-0.0693 * (time_to_cpb + time_on_cpb))
-    k2 = 0.693 / (26 + 0.323 * (heparin_bolus / ibw))
-    term2 = heparin_bolus * 0.9 * math.exp(-k2 * (time_on_cpb + time_to_cpb))
-    term3 = heparin_prime * math.exp(-k2 * time_on_cpb)
-    return term1 + term2 + term3
-  
-def prodose2_dose(heparin_bolus, heparin_prime, ibw, time_to_cpb, time_on_cpb):
+from nomogram_core import (                                     # noqa: E402
+    MODEL_NAMES,
+    MODEL_PARAMETERS,
+    DISPLAY_NAMES,
+    PAEDIATRIC_MODELS,
+    PRIME_TIMING_CHOICES,
+    canonical_model_name,
+    delavenne_dose,
+    delavenne_response,
+    get_delavenne_params,
+    get_jia_params,
+    get_lanoiselee_params,
+    get_reference_dose,
+    jia_dose,
+    jia_response,
+    lanoiselee_dose,
+    lanoiselee_response,
+    meesters_dose,
+    prodose2_dose,
+    prodose_dose,
+    reference_amount,
+    reference_amount_array,
+    simplified_amount,
+    simplified_amount_array,
+    simplified_model_dose,
+)
 
-    reinfusion = 1.0
-    k1 = 0.2847
-    v_prime_mL = 1500
-    
-    # Calculate base and CPB-adjusted elimination constants
-    k2_base = 0.693 / (52.44 + 0.2968 * (heparin_bolus / ibw))
-    ebv = ibw * 70  # Estimated Blood Volume
-    v_factor = ebv / (ebv + v_prime_mL)
-    k2_cpb = k2_base * v_factor
-    
-    # Initial dose at t = 0
-    pool_fast = heparin_bolus * 0.10
-    pool_slow = heparin_bolus * 0.90
-    
-    # Phase 1: Time to CPB
-    pool_fast = pool_fast * math.exp(-k1 * time_to_cpb)
-    pool_slow = pool_slow * math.exp(-k2_cpb * time_to_cpb) + heparin_prime
-    
-    # Phase 2: Time on CPB
-    pool_fast = pool_fast * math.exp(-k1 * time_on_cpb)
-    pool_slow = pool_slow * math.exp(-k2_cpb * time_on_cpb)
-    
-    # Reinfusion calculation
-    patient_mass = pool_slow * v_factor
-    circuit_mass = pool_slow * (1 - v_factor)
-    reinfused_mass = circuit_mass * reinfusion
-    
-    return patient_mass + reinfused_mass + pool_fast
-  
-def meesters_dose(heparin_bolus, heparin_prime, ibw, time_to_cpb, time_on_cpb):
-    """
-    Meesters formula.
-    All times in minutes, doses in IU, ibw in kg.
-    """
-    term1 = heparin_bolus * 0.1 * math.exp(-0.0693 * (time_to_cpb + time_on_cpb))
-    k2 = 0.693 / 250
-    term2 = heparin_bolus * 0.9 * math.exp(-k2 * (time_on_cpb + time_to_cpb))
-    term3 = heparin_prime * math.exp(-k2 * time_on_cpb)
-    return term1 + term2 + term3
-
-def get_lanoiselee_params():
-    """
-    Returns parameters derived from Lanoiselee_Model.R.
-    Cl = 25.003 mL/min
-    Vc = 4011.12 mL
-    Vp = 1458.59 mL
-    Q  = 4.7928 mL/min
-    """
-    Cl = 25.003
-    Vc = 4011.12
-    Vp = 1458.59
-    Q = 4.7928
-    
-    k10 = Cl / Vc
-    k12 = Q / Vc
-    k21 = Q / Vp
-    
-    # Analytical solution constants for 2-compartment model
-    sum_k = k10 + k12 + k21
-    root = math.sqrt(sum_k**2 - 4 * k10 * k21)
-    alpha = (sum_k + root) / 2
-    beta = (sum_k - root) / 2
-    
-    return alpha, beta, k21, Vc
-
-def lanoiselee_response(dose, t):
-    """
-    Calculates Amount in Central Compartment (Ac) at time t for a single bolus.
-    Analytical solution: A(t) = D * ( A*exp(-alpha*t) + B*exp(-beta*t) )
-    """
-    if t < 0: return 0.0
-    alpha, beta, k21, Vc = get_lanoiselee_params()
-    
-    # Coefficients
-    A_coeff = (alpha - k21) / (alpha - beta)
-    B_coeff = (k21 - beta) / (alpha - beta)
-    
-    return dose * (A_coeff * math.exp(-alpha * t) + B_coeff * math.exp(-beta * t))
-
-def lanoiselee_dose(heparin_bolus, heparin_prime, ibw, time_to_cpb, time_on_cpb):
-    """
-    Lanoiselee model response.
-    Note: The R script uses fixed population parameters, so IBW is not used 
-    for scaling kinetics, only for the initial bolus calculation if provided.
-    """
-    # Bolus at t=0
-    total_time = time_to_cpb + time_on_cpb
-    val_bolus = lanoiselee_response(heparin_bolus, total_time)
-    
-    # Prime at t=time_to_cpb (decays only during time_on_cpb)
-    val_prime = lanoiselee_response(heparin_prime, time_on_cpb)
-    
-    return val_bolus + val_prime
-
-def get_delavenne_params(weight_kg):
-    """
-    Returns parameters derived from Delavenne Model.
-    Units converted to mL and mL/min to match existing system.
-    
-    Source: Delavenne et al. (Image provided)
-    """
-    # Base Parameters (Population means for 70kg)
-    # Vc = 3.1 L, Vp = 2.23 L, Q = 4.67 L/h, Cl = 0.841 L/h
-    
-    # Covariate: Weight on Vc (Exponent 1 fixed)
-    # Vc_indiv = Vc_pop * (WT/70)^1
-    Vc_L = 3.1 * (weight_kg / 70.0)**1.0
-    
-    # Covariate: Weight on Cl (Exponent 0.767)
-    # Cl_indiv = Cl_pop * (WT/70)^0.767
-    Cl_L_h = 0.841 * (weight_kg / 70.0)**0.767
-    
-    # Fixed parameters (No covariate listed)
-    Vp_L = 2.23
-    Q_L_h = 4.67
-
-    # Convert to mL and mL/min
-    Vc = Vc_L * 1000.0
-    Vp = Vp_L * 1000.0
-    Cl = (Cl_L_h * 1000.0) / 60.0
-    Q  = (Q_L_h * 1000.0) / 60.0
-    
-    # Calculate micro-constants
-    k10 = Cl / Vc
-    k12 = Q / Vc
-    k21 = Q / Vp
-    
-    # Analytical solution constants (A*exp(-alpha*t) + B*exp(-beta*t))
-    sum_k = k10 + k12 + k21
-    root = math.sqrt(sum_k**2 - 4 * k10 * k21)
-    alpha = (sum_k + root) / 2
-    beta = (sum_k - root) / 2
-    
-    return alpha, beta, k21, Vc
-
-def delavenne_response(dose, t, weight_kg):
-    """
-    Calculates Amount in Central Compartment (Ac) at time t.
-    Requires weight for parameter scaling.
-    """
-    if t < 0: return 0.0
-    alpha, beta, k21, Vc = get_delavenne_params(weight_kg)
-    
-    # Coefficients
-    A_coeff = (alpha - k21) / (alpha - beta)
-    B_coeff = (k21 - beta) / (alpha - beta)
-    
-    return dose * (A_coeff * math.exp(-alpha * t) + B_coeff * math.exp(-beta * t))
-
-def delavenne_dose(heparin_bolus, heparin_prime, ibw, time_to_cpb, time_on_cpb):
-    """
-    Delavenne model response for Total Dose.
-    Note: Delavenne uses Actual Body Weight (ABW), but we pass 'ibw' here 
-    if that is the variable holding the patient weight in your system.
-    If you have a separate Actual Weight variable, pass that instead.
-    """
-    # Assuming 'ibw' argument holds the patient's weight in kg used for dosing
-    weight = ibw 
-    
-    # Bolus at t=0
-    total_time = time_to_cpb + time_on_cpb
-    val_bolus = delavenne_response(heparin_bolus, total_time, weight)
-    
-    # Prime at t=time_to_cpb
-    val_prime = delavenne_response(heparin_prime, time_on_cpb, weight)
-    
-    return val_bolus + val_prime
-  
-def get_jia_params(weight_kg):
-    """
-    Returns parameters derived from Jia Model.
-    Values from population estimates: Cl=1.18, Vc=3.04, Q=0.171, Vp=8.01.
-    """
-    # Note: If specific weight exponents are found later, apply here.
-    # Currently using fixed population means.
-    Vc_L = 3.04
-    Cl_L_h = 1.18
-    Vp_L = 8.01
-    Q_L_h = 0.171
-
-    # Convert to mL and mL/min
-    Vc = Vc_L * 1000.0
-    Vp = Vp_L * 1000.0
-    Cl = (Cl_L_h * 1000.0) / 60.0
-    Q  = (Q_L_h * 1000.0) / 60.0
-    
-    # Calculate micro-constants
-    k10 = Cl / Vc
-    k12 = Q / Vc
-    k21 = Q / Vp
-    
-    sum_k = k10 + k12 + k21
-    root = math.sqrt(sum_k**2 - 4 * k10 * k21)
-    alpha = (sum_k + root) / 2
-    beta = (sum_k - root) / 2
-    
-    return alpha, beta, k21, Vc
-
-def jia_response(dose, t, weight_kg):
-    """Calculates Amount in Central Compartment (Ac) at time t for Jia."""
-    if t < 0: return 0.0
-    alpha, beta, k21, Vc = get_jia_params(weight_kg)
-    
-    # Analytical coefficients
-    A_coeff = (alpha - k21) / (alpha - beta)
-    B_coeff = (k21 - beta) / (alpha - beta)
-    
-    return dose * (A_coeff * math.exp(-alpha * t) + B_coeff * math.exp(-beta * t))
-
-def jia_dose(heparin_bolus, heparin_prime, ibw, time_to_cpb, time_on_cpb):
-    weight = ibw 
-    total_time = time_to_cpb + time_on_cpb
-    val_bolus = jia_response(heparin_bolus, total_time, weight)
-    val_prime = jia_response(heparin_prime, time_on_cpb, weight)
-    return val_bolus + val_prime
-
-def get_reference_dose(model_name, h_bolus, h_prime, ibw, t_to, t_on):
-    if model_name.lower() == "prodose":
-        return prodose_dose(h_bolus, h_prime, ibw, t_to, t_on)
-    elif model_name.lower() == "prodose-2":
-        return prodose2_dose(h_bolus, h_prime, ibw, t_to, t_on)
-    elif model_name.lower() == "lanoiselee":
-        return lanoiselee_dose(h_bolus, h_prime, ibw, t_to, t_on)
-    elif model_name.lower() == "meesters":
-        return meesters_dose(h_bolus, h_prime, ibw, t_to, t_on)
-    elif model_name.lower() == "delavenne":
-        return delavenne_dose(h_bolus, h_prime, ibw, t_to, t_on)
-    elif model_name.lower() == "jia":
-        return jia_dose(h_bolus, h_prime, ibw, t_to, t_on)
-    else:
-        raise ValueError(f"Unknown model: {model_name}")
-
-def simplified_model_dose(heparin_bolus, heparin_prime, ibw, time_to_cpb, time_on_cpb, k):
-    """
-    Simplified protamine model using a single decay constant k.
-    """
-    total_heparin = heparin_bolus + heparin_prime
-    effective_time = time_to_cpb + time_on_cpb
-    return total_heparin * math.exp(-k * effective_time)
+# Agreement statistics, including the proportional-bias regression, relative
+# errors and stratified performance the revision requires (EB-3).
+from agreement import (                                         # noqa: E402
+    SIGN_CONVENTION,
+    SIGN_CONVENTION_LABEL,
+    DEFAULT_THRESHOLD_IU,
+    bland_altman,
+    bland_altman_stats,
+    difference,
+    full_agreement_report,
+    proportional_bias,
+    relative_errors,
+    threshold_coverage,
+)
 
 # ==========================================
 # STATS & OPTIMIZATION
 # ==========================================
+#
+# The calibration machinery lives in calibration.py, which is seeded, has a
+# parameterised objective function and can target either the reversal endpoint
+# or the decay trajectory. The wrappers below keep this module's original call
+# signatures so the dashboard is unchanged, while adding an explicit `seed`.
 
-def bland_altman_stats(ref, test):
-    ref = np.asarray(ref)
-    test = np.asarray(test)
-    diff = ref - test
-    bias = np.mean(diff)
-    sd = np.std(diff, ddof=1)
-    loa_low = bias - 1.96 * sd
-    loa_high = bias + 1.96 * sd
-    return bias, loa_low, loa_high
+from calibration import (                                       # noqa: E402
+    K_BOUNDS,
+    K_BOUNDS_NOTE,
+    OBJECTIVES,
+    OBJECTIVE_LABELS,
+    EVALUATION_MODES,
+    CohortSpec,
+    calibrate_k,
+    evaluation_times,
+    input_sensitivity,
+    monte_carlo_precision,
+    nomogram_values,
+    objective_sensitivity,
+    parameter_uncertainty,
+    reference_values,
+    sample_cohort,
+    summarise_k,
+)
+from calibration import find_best_k as _calibrate_from_spec     # noqa: E402
 
-def bland_altman_score(ref, test):
+
+def bland_altman_score(ref, test, loa_weight=0.1):
+    """The primary objective: |bias| + 0.1 x LoA width.
+
+    Kept here for backwards compatibility; the weight is now exposed because
+    the one-tenth value is arbitrary and its influence on k is reported as a
+    sensitivity analysis rather than defended (EB-3, R1 p9 L44).
+    """
     bias, loa_low, loa_high = bland_altman_stats(ref, test)
-    width = loa_high - loa_low
-    return abs(bias) + 0.1 * width
+    return abs(bias) + loa_weight * (loa_high - loa_low)
+
+
+def _spec(initial_dose_per_kg, prime_heparin, ibw_mean, ibw_sd,
+          t_to_mean, t_to_sd, t_on_mean, t_on_sd, population="adult"):
+    return CohortSpec(
+        name=f"{initial_dose_per_kg:g}IUkg_{ibw_mean:g}kg_{t_to_mean:g}_{t_on_mean:g}",
+        dose_per_kg=initial_dose_per_kg, prime_heparin=prime_heparin,
+        ibw_mean=ibw_mean, ibw_sd=ibw_sd,
+        t_to_mean=t_to_mean, t_to_sd=t_to_sd,
+        t_on_mean=t_on_mean, t_on_sd=t_on_sd, population=population,
+    )
+
 
 @st.cache_data(show_spinner=False)
-def find_best_k(initial_dose_per_kg, prime_heparin, ibw_mean, ibw_sd, 
-                t_to_mean, t_to_sd, t_on_mean, t_on_sd, 
-                model_name, n_sim=1000):
+def find_best_k(initial_dose_per_kg, prime_heparin, ibw_mean, ibw_sd,
+                t_to_mean, t_to_sd, t_on_mean, t_on_sd,
+                model_name, n_sim=1000, seed=DEFAULT_SEED,
+                objective="bland_altman", evaluation_mode="reversal_endpoint",
+                prime_timing="lumped_t0"):
+    """Calibrate k against one seeded synthetic cohort.
 
-    ibw = np.random.normal(loc=ibw_mean, scale=ibw_sd, size=n_sim)
-    heparin_bolus = initial_dose_per_kg * ibw
-    
-    time_to_cpb_samples = np.clip(np.random.normal(loc=t_to_mean, scale=t_to_sd, size=n_sim), 0, None)
-    time_on_cpb_samples = np.clip(np.random.normal(loc=t_on_mean, scale=t_on_sd, size=n_sim), 0, None)
+    `seed` is part of the Streamlit cache key, so a given configuration always
+    returns the same constant within and across sessions.
+    """
+    spec = _spec(initial_dose_per_kg, prime_heparin, ibw_mean, ibw_sd,
+                 t_to_mean, t_to_sd, t_on_mean, t_on_sd)
+    return _calibrate_from_spec(spec, model_name, seed=seed, n_sim=n_sim,
+                                objective=objective,
+                                evaluation_mode=evaluation_mode,
+                                prime_timing=prime_timing).k
 
-    # Reference Doses
-    ref_doses = [
-        get_reference_dose(model_name, h, prime_heparin, w, t_to, t_on)
-        for h, w, t_to, t_on in zip(heparin_bolus, ibw, time_to_cpb_samples, time_on_cpb_samples)
-    ]
-
-    def objective(k):
-        test_doses = [
-            simplified_model_dose(h, prime_heparin, w, t_to, t_on, k)
-            for h, w, t_to, t_on in zip(heparin_bolus, ibw, time_to_cpb_samples, time_on_cpb_samples)
-        ]
-        return bland_altman_score(ref_doses, test_doses)
-
-    result = minimize_scalar(objective, bounds=(0.001, 0.03), method='bounded')
-    return result.x
 
 @st.cache_data(show_spinner=False)
-def bootstrap_k_distribution(initial_dose_per_kg, prime_heparin, ibw_mean, ibw_sd,
-                             t_to_mean, t_to_sd, t_on_mean, t_on_sd,
-                             model_name, n_boot=1000, n_sim=1000):
+def monte_carlo_k_distribution(initial_dose_per_kg, prime_heparin, ibw_mean, ibw_sd,
+                               t_to_mean, t_to_sd, t_on_mean, t_on_sd,
+                               model_name, n_boot=1000, n_sim=1000,
+                               seed=DEFAULT_SEED, **kwargs):
+    """Repeat the calibration on fresh cohorts from the SAME fixed distributions.
 
-    k_values = []
-    for _ in range(n_boot):
-        # Resample logic is identical to find_best_k, effectively wrapped here
-        # Just calling find_best_k repeatedly is cleaner but might be slower due to overhead.
-        # We'll inline the simulation loop for speed as in original code.
+    This was previously called `bootstrap_k_distribution`, which was a
+    misnomer: no dataset is resampled, a new synthetic cohort is simulated each
+    time. What it measures is Monte Carlo sampling precision, and that is how it
+    must be labelled wherever it appears (EB-2). It does not quantify
+    uncertainty in the published PK parameters, in the institutional input
+    estimates, in model selection, or in an individual patient's prediction --
+    for the first of those, see `parameter_uncertainty`.
+    """
+    spec = _spec(initial_dose_per_kg, prime_heparin, ibw_mean, ibw_sd,
+                 t_to_mean, t_to_sd, t_on_mean, t_on_sd)
+    df = monte_carlo_precision(spec, model_name, seed=seed,
+                               n_replicates=n_boot, n_sim=n_sim, **kwargs)
+    return df["k"].to_numpy()
 
-        ibw = np.random.normal(loc=ibw_mean, scale=ibw_sd, size=n_sim) # Resample population center?
-        # Actually standard bootstrap usually resamples the *dataset*, but here we simulate.
-        # We generate a new synthetic cohort every time.
 
-        heparin_bolus = initial_dose_per_kg * ibw
-        time_to_cpb_samples = np.clip(np.random.normal(loc=t_to_mean, scale=t_to_sd, size=n_sim), 0, None)
-        time_on_cpb_samples = np.clip(np.random.normal(loc=t_on_mean, scale=t_on_sd, size=n_sim), 0, None)
+# Retained under the old name so existing callers keep working; the label is
+# wrong and should not be used in the manuscript.
+bootstrap_k_distribution = monte_carlo_k_distribution
 
-        ref_doses = [
-            get_reference_dose(model_name, h, prime_heparin, w, t_to, t_on)
-            for h, w, t_to, t_on in zip(heparin_bolus, ibw, time_to_cpb_samples, time_on_cpb_samples)
-        ]
-
-        def objective(k):
-            test_doses = [
-                simplified_model_dose(h, prime_heparin, w, t_to, t_on, k)
-                for h, w, t_to, t_on in zip(heparin_bolus, ibw, time_to_cpb_samples, time_on_cpb_samples)
-            ]
-            return bland_altman_score(ref_doses, test_doses)
-
-        result = minimize_scalar(objective, bounds=(0.001, 0.03), method='bounded')
-        k_values.append(result.x)
-
-    return np.array(k_values)
 
 def summarize_k_distribution(k_values):
-    mean_k = np.mean(k_values)
-    ci_low = np.percentile(k_values, 2.5)
-    ci_high = np.percentile(k_values, 97.5)
-    return mean_k, ci_low, ci_high
+    """Mean and 2.5th/97.5th percentiles of the replicate distribution.
 
+    The interval is a Monte Carlo sampling-precision interval, not a predicted
+    margin of error (EB-2).
+    """
+    s = summarise_k(k_values)
+    return s["k_mean"], s["k_p2_5"], s["k_p97_5"]
 # ==========================================
 # NOMOGRAM PDF GENERATION
 # ==========================================
@@ -434,53 +254,80 @@ def add_footer_to_pdf(input_pdf, output_pdf, footer_text):
 # PLOTTING & UTILS
 # ==========================================
 
-def bland_altman_plot(ref, test, model_label="Reference"):
-    ref = np.asarray(ref)
-    test = np.asarray(test)
-    diff = ref - test
-    mean_vals = (ref + test) / 2
-    bias = np.mean(diff)
-    sd = np.std(diff, ddof=1)
-    loa_low = bias - 1.96 * sd
-    loa_high = bias + 1.96 * sd
+def bland_altman_plot(ref, test, model_label="Reference", threshold_iu=DEFAULT_THRESHOLD_IU):
+    """Bland-Altman plot with the proportional-bias regression drawn on it (EB-3).
 
-    fig, ax = plt.subplots(figsize=(6, 4))
-    ax.scatter(mean_vals, diff, alpha=0.4)
-    ax.axhline(bias, color='red', linestyle='--', label=f'Bias = {bias:.2f}')
-    ax.axhline(loa_low, color='green', linestyle='--', label=f'LOA Low = {loa_low:.2f}')
-    ax.axhline(loa_high, color='green', linestyle='--', label=f'LOA High = {loa_high:.2f}')
-    ax.set_xlabel(f"Mean of {model_label} and Simplified (IU)")
-    ax.set_ylabel(f"Diff ({model_label} - Simplified) (IU)")
-    ax.set_title(f"Bland–Altman: {model_label} vs Simplified")
-    ax.legend()
+    The axis label states the sign convention explicitly. The submitted figure
+    plotted the difference one way round while the manuscript body quoted it the
+    other, which is why the same analysis appeared as -5.5 IU in the text and
+    +5.62 IU in the legend.
+    """
+    ref = np.asarray(ref, dtype=float)
+    test = np.asarray(test, dtype=float)
+    diff = difference(ref, test)
+    mean_vals = (ref + test) / 2.0
+
+    ba = bland_altman(ref, test)
+    pb = proportional_bias(ref, test)
+
+    fig, ax = plt.subplots(figsize=(7, 4.5))
+    ax.scatter(mean_vals, diff, alpha=0.35, s=14, color="steelblue",
+               edgecolors="none")
+    ax.axhline(ba.bias, color="red", linestyle="--", lw=1.4,
+               label=f"Bias = {ba.bias:.2f} IU")
+    ax.axhline(ba.loa_low, color="green", linestyle="--", lw=1.2,
+               label=f"95% LoA = {ba.loa_low:.1f} to {ba.loa_high:.1f} IU")
+    ax.axhline(ba.loa_high, color="green", linestyle="--", lw=1.2)
+    ax.axhline(0.0, color="grey", lw=0.6)
+
+    xs = np.linspace(mean_vals.min(), mean_vals.max(), 100)
+    ax.plot(xs, pb.intercept + pb.slope * xs, color="darkorange", lw=1.6,
+            label=(f"Proportional bias: slope {pb.slope:+.4f} "
+                   f"(p = {pb.slope_p:.2g})"))
+
+    if threshold_iu:
+        ax.axhspan(-threshold_iu, threshold_iu, color="grey", alpha=0.08,
+                   label=f"+/-{threshold_iu:,.0f} IU threshold")
+
+    ax.set_xlabel(f"Mean of {model_label} and nomogram (IU)")
+    ax.set_ylabel(f"Difference, {model_label} minus nomogram (IU)")
+    ax.set_title(f"{model_label} versus simplified nomogram\n"
+                 "positive = nomogram under-estimates residual heparin",
+                 fontsize=10)
+    ax.legend(fontsize=7, loc="best")
+    fig.tight_layout()
     return fig
 
-@st.cache_resource(show_spinner=False)
-def plot_k_posterior(k_values):
-    fig, ax = plt.subplots(figsize=(6, 4))
+
+def plot_k_posterior(k_values, label="Monte Carlo sampling precision"):
+    """Distribution of k across replicate cohorts.
+
+    Deliberately NOT called a posterior: no prior is specified and no Bayesian
+    inference is performed. It is the spread of the point estimate across
+    repeated simulated cohorts (EB-2).
+    """
     from scipy.stats import gaussian_kde
+
+    k_values = np.asarray(k_values, dtype=float)
+    fig, ax = plt.subplots(figsize=(6, 4))
     try:
         kde = gaussian_kde(k_values)
-        xs = np.linspace(min(k_values)*0.9, max(k_values)*1.1, 200)
-        ax.plot(xs, kde(xs), color='darkblue', lw=2)
-    except:
-        pass # Fallback if singular
-    ax.hist(k_values, bins=20, density=True, alpha=0.3, color='steelblue')
-    ax.set_title("Posterior Distribution of k")
-    ax.set_xlabel("k")
+        xs = np.linspace(k_values.min() * 0.98, k_values.max() * 1.02, 250)
+        ax.plot(xs, kde(xs), color="darkblue", lw=2)
+    except Exception:
+        pass
+    ax.hist(k_values, bins=25, density=True, alpha=0.3, color="steelblue")
+    lo, hi = np.percentile(k_values, [2.5, 97.5])
+    ax.axvline(k_values.mean(), color="red", ls="--", lw=1.2,
+               label=f"mean {k_values.mean():.5f}")
+    ax.axvline(lo, color="green", ls=":", lw=1.0)
+    ax.axvline(hi, color="green", ls=":", lw=1.0,
+               label=f"2.5-97.5% {lo:.5f} to {hi:.5f}")
+    ax.set_title(f"Distribution of k across replicate cohorts\n({label})", fontsize=10)
+    ax.set_xlabel("k (/min)")
+    ax.legend(fontsize=8)
+    fig.tight_layout()
     return fig
-
-@st.cache_resource(show_spinner=False)
-def plot_sensitivity(df):
-    fig, ax = plt.subplots(figsize=(7, 4))
-    for param in df["Parameter"].unique():
-        subset = df[df["Parameter"] == param]
-        ax.plot(["low", "high"], subset["k_best"], marker="o", label=param)
-    ax.set_title("Sensitivity Analysis")
-    ax.set_ylabel("k value")
-    ax.legend()
-    return fig
-
 @st.cache_resource(show_spinner=False)
 def plot_tornado(df):
     params = []
@@ -526,235 +373,324 @@ def plot_tornado(df):
     
     return fig
 
-def clinical_summary(k_best, bias, loa_low, loa_high, ibw_mean, model_name):
-    return f"""
-    **Clinical Interpretation ({model_name} Benchmark)**
 
-    • The calibrated decay constant is **k = {k_best:.5f}**.
-    
-    • The simplified model shows a **bias of {bias:.1f} IU** relative to {model_name}.
-    
-    • The 95% limits of agreement are **{loa_low:.1f} to {loa_high:.1f} IU**.
-    
-    • Population IBW mean: **{ibw_mean:.0f} kg**.
+def clinical_summary(k_best, agreement, ibw_mean, model_name,
+                     mc_interval=None, threshold_iu=DEFAULT_THRESHOLD_IU):
+    """Modelling summary for the dashboard.
+
+    Deliberately free of clinical claims: the pipeline reports the
+    pharmacokinetic central-compartment amount only, and does not model the
+    pharmacodynamic (anti-Xa or ACT) layer, peripheral-compartment heparin,
+    antithrombin, protamine pharmacology or rebound (EB-1). Errors are
+    described relative to one protamine dosing increment under the simulated
+    assumptions, not as clinically negligible (R1 p13 L9).
+    """
+    interval = ""
+    if mc_interval is not None:
+        interval = (f"\n    - Monte Carlo sampling-precision interval: "
+                    f"**{mc_interval[0]:.5f} to {mc_interval[1]:.5f}** "
+                    f"(not a predictive or parameter-uncertainty interval)")
+
+    prop = ("a statistically detectable proportional bias"
+            if agreement["prop_bias_significant"] else
+            "no statistically detectable proportional bias")
+
+    return f"""
+    **Approximation summary, {model_name} as the reference model**
+
+    - Calibrated decay constant: **k = {k_best:.5f} /min**
+      (apparent half-life {np.log(2.0) / k_best:.0f} min).{interval}
+
+    - Difference convention: {SIGN_CONVENTION_LABEL}.
+
+    - Mean bias **{agreement['bias']:+.1f} IU**
+      (95% CI {agreement['bias_ci_low']:+.1f} to {agreement['bias_ci_high']:+.1f}),
+      95% limits of agreement **{agreement['loa_low']:+.1f} to {agreement['loa_high']:+.1f} IU**.
+
+    - Relative error: mean **{agreement['mean_pct_error']:+.2f}%**, mean absolute
+      **{agreement['mean_abs_pct_error']:.2f}%**, largest absolute
+      **{agreement['max_abs_pct_error']:.1f}%**.
+
+    - Bland-Altman regression of difference on mean: slope
+      **{agreement['prop_bias_slope']:+.4f}** (p = {agreement['prop_bias_slope_p']:.2g}),
+      i.e. {prop}.
+
+    - **{agreement['pct_within_threshold_iu']:.1f}%** of simulated patients fall within
+      {threshold_iu:,.0f} IU, one {threshold_iu / 100:.0f} mg protamine increment at a
+      1 mg : 100 IU ratio.
+
+    - Population IBW mean: **{ibw_mean:.0f} kg**. The comparison cohort is a fresh
+      draw from the same assumed distributions, i.e. an internal resample, and is
+      not an external validation cohort.
     """
 
 # ==========================================
-# 4. SENSITIVITY ANALYSIS & PLOTTING
+# SENSITIVITY ANALYSIS
 # ==========================================
 
 @st.cache_data(show_spinner=False)
-def sensitivity_analysis(initial_dose_per_kg,
-                         prime_heparin,
-                         ibw_mean, ibw_sd,
-                         t_to_mean, t_to_sd,
-                         t_on_mean, t_on_sd,
-                         model_name="PRODOSE",
-                         variation=0.2):
+def sensitivity_analysis(initial_dose_per_kg, prime_heparin,
+                         ibw_mean, ibw_sd, t_to_mean, t_to_sd,
+                         t_on_mean, t_on_sd, model_name="PRODOSE",
+                         variation=0.2, n_sim=500, seed=DEFAULT_SEED,
+                         **kwargs):
+    """One-factor-at-a-time sensitivity of k to each input moment.
+
+    Each perturbed configuration draws its own cohort from a seed derived
+    deterministically from `seed`, so the table is identical on every run. The
+    default variation is +/-20%, which the manuscript now reports in the main
+    text rather than the supplement (EB-8).
     """
-    Performs One-Factor-At-A-Time (OFAT) sensitivity analysis.
-    Varies each input parameter by +/- 'variation' (default 20%) 
-    and observes the impact on the calibrated k value.
-    """
-    
-    # Base parameters centered on the simulation inputs
-    base_params = {
-        "ibw_mean": ibw_mean,
-        "ibw_sd": ibw_sd,
-        "t_to_mean": t_to_mean,
-        "t_to_sd": t_to_sd,
-        "t_on_mean": t_on_mean,
-        "t_on_sd": t_on_sd
-    }
+    spec = _spec(initial_dose_per_kg, prime_heparin, ibw_mean, ibw_sd,
+                 t_to_mean, t_to_sd, t_on_mean, t_on_sd)
+    df = input_sensitivity(spec, model_name, seed=seed, variation=variation,
+                           n_sim=n_sim, **kwargs)
+    # Column names the existing dashboard expects.
+    return df.rename(columns={"parameter": "Parameter", "direction": "Direction",
+                              "modified_value": "Modified value", "k": "k_best"})
 
-    results = []
-    
-    # Visual progress bar for the user
-    total_steps = len(base_params) * 2 
-    progress_text = "Running Sensitivity Analysis..."
-    my_bar = st.progress(0, text=progress_text)
-    step_count = 0
-
-    for param_name, base_value in base_params.items():
-        for direction, factor in [("low", 1 - variation), ("high", 1 + variation)]:
-            # Create a copy of params and modify just one
-            current_params = base_params.copy()
-            current_params[param_name] = base_value * factor
-
-            # Re-run calibration with the modified parameter set
-            k_mod = find_best_k(
-                initial_dose_per_kg,
-                prime_heparin,
-                current_params["ibw_mean"],
-                current_params["ibw_sd"],
-                current_params["t_to_mean"],
-                current_params["t_to_sd"],
-                current_params["t_on_mean"],
-                current_params["t_on_sd"],
-                model_name=model_name,
-                n_sim=500  # Lower simulation count for speed during sensitivity
-            )
-
-            results.append({
-                "Parameter": param_name,
-                "Direction": direction,
-                "Modified value": current_params[param_name],
-                "k_best": k_mod
-            })
-            
-            step_count += 1
-            my_bar.progress(step_count / total_steps, text=f"Sensitivity: {param_name} ({direction})")
-    
-    my_bar.empty() # Clear progress bar when done
-    return pd.DataFrame(results)
 
 @st.cache_resource(show_spinner=False)
 def plot_sensitivity(df):
-    """
-    Plots a line graph showing how k changes for Low vs High inputs.
-    """
+    """How k moves when each input is varied by +/- the stated fraction."""
     fig, ax = plt.subplots(figsize=(7, 4))
-
+    variation = df["variation"].iloc[0] if "variation" in df else 0.2
     for param in df["Parameter"].unique():
-        subset = df[df["Parameter"] == param]
-        # Plot markers connected by a line
-        ax.plot(["Low (-20%)", "High (+20%)"], subset["k_best"], marker="o", label=param)
-
-    ax.set_title("Sensitivity of k to Model Inputs")
-    ax.set_ylabel("Calibrated k value")
-    ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    plt.tight_layout()
+        subset = df[df["Parameter"] == param].sort_values("Direction")
+        ax.plot([f"Low (-{variation:.0%})", f"High (+{variation:.0%})"],
+                subset["k_best"], marker="o", label=param)
+    ax.set_title("Sensitivity of k to the simulation inputs")
+    ax.set_ylabel("Calibrated k (/min)")
+    ax.legend(bbox_to_anchor=(1.05, 1), loc="upper left", fontsize=8)
+    fig.tight_layout()
     return fig
 
+
 # ==========================================
-# UPDATED MAIN RUNNER
+# MAIN RUNNER
 # ==========================================
 
-def run_nomogram(initial_dose_per_kg, t_to_mean, prime_heparin, 
-                 ibw_mean, ibw_sd, t_to_sd, t_on_mean, t_on_sd, 
-                 model_name):
-    
-    # 1. Calibrate Best k
-    k_best = find_best_k(initial_dose_per_kg, prime_heparin, ibw_mean, ibw_sd, 
-                         t_to_mean, t_to_sd, t_on_mean, t_on_sd, model_name)
-    
-    # 2. Bootstrap for Uncertainty
-    k_boot = bootstrap_k_distribution(initial_dose_per_kg, prime_heparin, ibw_mean, ibw_sd,
-                                      t_to_mean, t_to_sd, t_on_mean, t_on_sd, model_name)
-    mean_k, ci_low, ci_high = summarize_k_distribution(k_boot)
+def run_nomogram(initial_dose_per_kg, t_to_mean, prime_heparin,
+                 ibw_mean, ibw_sd, t_to_sd, t_on_mean, t_on_sd,
+                 model_name, seed=DEFAULT_SEED, n_sim=1000,
+                 n_replicates=500, variation=0.2,
+                 evaluation_mode="reversal_endpoint",
+                 prime_timing="lumped_t0",
+                 threshold_iu=DEFAULT_THRESHOLD_IU):
+    """Full diagnostic run for one reference model.
 
-    # 3. Sensitivity Analysis
-    sens_df = sensitivity_analysis(
-        initial_dose_per_kg, prime_heparin, 
-        ibw_mean, ibw_sd, 
-        t_to_mean, t_to_sd, 
-        t_on_mean, t_on_sd, 
-        model_name=model_name
-    )
+    Two defects in the submitted version are fixed here, both of which fed the
+    numerical inconsistencies the reviewers found (EB-3):
+
+    1. **One k, used everywhere.** The submitted code calibrated `k_best` on one
+       unseeded cohort, used it for the agreement statistics, then printed a
+       *different* constant (the replicate mean) on the PDF and in its footer --
+       while the dashboard's interactive nomogram read a *third* value from a
+       lookup table built at n_sim = 200. The reported constant is now the mean
+       over the replicate cohorts, and that single value is used for the
+       statistics, the plots, the PDF and the footer alike.
+
+    2. **One test cohort, drawn from a declared seed.** The submitted code drew a
+       fresh unseeded cohort for the diagnostics after calibrating on another
+       one, so the residual bias -- which the objective drives to nearly zero --
+       came out as a few IU with a sign that changed from run to run.
+    """
+    spec = _spec(initial_dose_per_kg, prime_heparin, ibw_mean, ibw_sd,
+                 t_to_mean, t_to_sd, t_on_mean, t_on_sd)
+    calib = dict(evaluation_mode=evaluation_mode, prime_timing=prime_timing)
+
+    # 1. Calibrate, and take the replicate mean as THE decay constant.
+    k_draws = monte_carlo_precision(spec, model_name, seed=seed,
+                                    n_replicates=n_replicates, n_sim=n_sim,
+                                    **calib)["k"].to_numpy()
+    k_summary = summarise_k(k_draws)
+    k_best = k_summary["k_mean"]
+    ci_low, ci_high = k_summary["k_p2_5"], k_summary["k_p97_5"]
+
+    # 2. Sensitivity analyses.
+    sens_df = sensitivity_analysis(initial_dose_per_kg, prime_heparin,
+                                   ibw_mean, ibw_sd, t_to_mean, t_to_sd,
+                                   t_on_mean, t_on_sd, model_name=model_name,
+                                   variation=variation, n_sim=max(500, n_sim // 2),
+                                   seed=seed, **calib)
     sens_fig = plot_sensitivity(sens_df)
     tornado_fig = plot_tornado(sens_df)
+    obj_df = objective_sensitivity(spec, model_name, seed=seed, n_sim=n_sim, **calib)
 
-    # 4. Generate Diagnostics Data (Simulation)
-    n_sim = 1000
-    ibw = np.random.normal(ibw_mean, ibw_sd, n_sim)
-    heparin_bolus = initial_dose_per_kg * ibw
-    t_to = np.clip(np.random.normal(t_to_mean, t_to_sd, n_sim), 0, None)
-    t_on = np.clip(np.random.normal(t_on_mean, t_on_sd, n_sim), 0, None)
-    
-    ref_doses = [get_reference_dose(model_name, h, prime_heparin, w, t1, t2) 
-                 for h, w, t1, t2 in zip(heparin_bolus, ibw, t_to, t_on)]
-    
-    test_doses = [simplified_model_dose(h, prime_heparin, w, t1, t2, k_best) 
-                  for h, w, t1, t2 in zip(heparin_bolus, ibw, t_to, t_on)]
-    
-    # 5. Pack Data for Dashboard
+    # 3. Evaluate on one declared internal test cohort.
+    test_rng = np.random.default_rng(seed + 1)
+    cohort = sample_cohort(spec, n_sim, test_rng)
+    times = evaluation_times(cohort, "reversal_endpoint")
+    ref_doses = reference_values(cohort, model_name, times).ravel()
+    test_doses = nomogram_values(cohort, times, k_best, prime_timing).ravel()
+
+    agreement, strata_df = full_agreement_report(cohort, ref_doses, test_doses,
+                                                 threshold_iu=threshold_iu)
+    bias, loa_low, loa_high = (agreement["bias"], agreement["loa_low"],
+                               agreement["loa_high"])
+
     sim_df = pd.DataFrame({
-        "IBW": ibw, "Ref_Dose": ref_doses, "Simp_Dose": test_doses, "TimeOn": t_on
+        "IBW": cohort["ibw"], "TimeTo": cohort["time_to_cpb"],
+        "TimeOn": cohort["time_on_cpb"], "Elapsed": cohort["elapsed_time"],
+        "Ref_Dose": ref_doses, "Simp_Dose": test_doses,
+        "Diff_Ref_minus_Simp": difference(ref_doses, test_doses),
     })
-    
-    # Metrics
-    rmse = np.sqrt(np.mean((np.array(test_doses) - np.array(ref_doses))**2))
-    mae = np.mean(np.abs(np.array(test_doses) - np.array(ref_doses)))
-    r2 = np.corrcoef(test_doses, ref_doses)[0, 1] ** 2
-    
+
     diagnostics = {
-        "RMSE (IU)": rmse, "MAE (IU)": mae, "R²": r2,
-        "% within ±5%": np.mean(np.abs(np.array(test_doses) - np.array(ref_doses)) <= 0.05 * np.array(ref_doses)) * 100,
-        "% within ±10%": np.mean(np.abs(np.array(test_doses) - np.array(ref_doses)) <= 0.10 * np.array(ref_doses)) * 100
+        "k": k_best,
+        "k sampling interval": f"{ci_low:.5f} to {ci_high:.5f}",
+        "RMSE (IU)": agreement["rmse_iu"],
+        "MAE (IU)": agreement["mae_iu"],
+        "Max abs error (IU)": agreement["max_abs_error_iu"],
+        "Mean % error": agreement["mean_pct_error"],
+        "MAPE (%)": agreement["mean_abs_pct_error"],
+        "Max abs % error": agreement["max_abs_pct_error"],
+        "Proportional bias slope": agreement["prop_bias_slope"],
+        "Proportional bias p": agreement["prop_bias_slope_p"],
+        f"% within {threshold_iu:,.0f} IU": agreement["pct_within_threshold_iu"],
+        "% within 10%": agreement["pct_within_threshold_pct"],
+        # Retained as a descriptor of the scatter only; R-squared is not a
+        # measure of agreement (EB-3).
+        "R² (descriptive only)": agreement["descriptive_r_squared"],
     }
 
-    bias, loa_low, loa_high = bland_altman_stats(ref_doses, test_doses)
-    
-    # 6. Generate PDF & Plots
-    pdf_path_raw = build_nomogram(mean_k) # Uses Nomographer
+    # 4. Figures and the printed nomogram -- all using the same k_best.
+    build_nomogram(k_best)
     center_pdf_on_a4("heparin_dose_decay_nomogram.pdf", "nomogram_a4.pdf")
-    footer_text = f"Generated for parameters: Initial heparin: {initial_dose_per_kg}, heparin in prime: {prime_heparin},\ntime to CPB: {t_to_mean}±{t_to_sd}, time on CPB: {t_on_mean}±{t_on_sd}, IBW: {ibw_mean}±{ibw_sd}\nReference model: {model_name}. k={mean_k:.5f}. {APP_VERSION}"
+    footer_text = (
+        f"Reference model: {model_name}. k={k_best:.5f}/min "
+        f"(Monte Carlo sampling interval {ci_low:.5f}-{ci_high:.5f}).\n"
+        f"Initial heparin: {initial_dose_per_kg} IU/kg, heparin in prime: {prime_heparin} IU, "
+        f"time to CPB: {t_to_mean}+/-{t_to_sd} min, time on CPB: {t_on_mean}+/-{t_on_sd} min, "
+        f"IBW: {ibw_mean}+/-{ibw_sd} kg.\n"
+        f"Calibration endpoint: {evaluation_mode}; prime timing: {prime_timing}; "
+        f"seed {seed}. {APP_VERSION}\n"
+        f"Research and educational instrument. Estimates pharmacokinetic residual "
+        f"heparin only; converting it to a protamine dose requires the institutional ratio."
+    )
     pdf_path = "nomogram_final.pdf"
     add_footer_to_pdf("nomogram_a4.pdf", pdf_path, footer_text)
 
-    fig_ba = bland_altman_plot(ref_doses, test_doses, model_label=model_name)
-    k_post_fig = plot_k_posterior(k_boot)
-    
+    fig_ba = bland_altman_plot(ref_doses, test_doses, model_label=model_name,
+                               threshold_iu=threshold_iu)
+    k_post_fig = plot_k_posterior(k_draws)
+
     scatter_fig, ax = plt.subplots(figsize=(6, 4))
-    sc = ax.scatter(ref_doses, test_doses, c=t_on, cmap="viridis", alpha=0.8)
-    ax.plot([min(ref_doses), max(ref_doses)], [min(ref_doses), max(ref_doses)], "r--")
-    ax.set_xlabel(f"{model_name} Dose")
-    ax.set_ylabel("Simplified Dose")
-    plt.colorbar(sc, label="Time on CPB")
+    sc = ax.scatter(ref_doses, test_doses, c=cohort["elapsed_time"],
+                    cmap="viridis", alpha=0.8, s=14)
+    lims = [float(min(ref_doses.min(), test_doses.min())),
+            float(max(ref_doses.max(), test_doses.max()))]
+    ax.plot(lims, lims, "r--", lw=1)
+    ax.set_xlabel(f"{model_name} residual heparin (IU)")
+    ax.set_ylabel("Nomogram residual heparin (IU)")
+    scatter_fig.colorbar(sc, ax=ax, label="Elapsed time (min)")
+    scatter_fig.tight_layout()
 
-    summary_text = clinical_summary(mean_k, bias, loa_low, loa_high, ibw_mean, model_name)
+    summary_text = clinical_summary(k_best, agreement, ibw_mean, model_name,
+                                    mc_interval=(ci_low, ci_high),
+                                    threshold_iu=threshold_iu)
 
-    return (pdf_path, k_best, bias, loa_low, loa_high, fig_ba, mean_k, ci_low, ci_high, 
-            k_post_fig, scatter_fig, sim_df, summary_text, sens_df, sens_fig, tornado_fig, "", diagnostics)
+    metadata = {
+        "seed": seed, "n_sim": n_sim, "n_replicates": n_replicates,
+        "evaluation_mode": evaluation_mode, "prime_timing": prime_timing,
+        "sign_convention": SIGN_CONVENTION, "k_search_bounds": K_BOUNDS,
+        "threshold_iu": threshold_iu, "app_version": APP_VERSION,
+        "variation": variation, "n_test": n_sim,
+        "agreement": agreement, "strata": strata_df, "objectives": obj_df,
+    }
+
+    return (pdf_path, k_best, bias, loa_low, loa_high, fig_ba, k_best, ci_low, ci_high,
+            k_post_fig, scatter_fig, sim_df, summary_text, sens_df, sens_fig,
+            tornado_fig, metadata, diagnostics)
+
 
 # ==========================================
 # GRID GENERATION
 # ==========================================
 
-# Use these exact lists in both files
-heparin_grid = [250, 300, 350, 400, 450, 500, 550, 600]
-ibw_grid      = [40, 55, 70, 85, 100, 115]
-time_to_grid  = [5, 15, 25, 35] 
-time_on_grid  = [30, 60, 90, 120]
-prime_grid    = [0, 5000, 10000]
+from parameter_spaces import (                                  # noqa: E402
+    ADULT_GRID,
+    PAEDIATRIC_GRID,
+    CANONICAL_COHORTS,
+    grid_for,
+)
 
-def generate_v2_table_deterministic():
+# Kept as module-level names because the dashboard imports them.
+heparin_grid = ADULT_GRID["dose_per_kg"]
+ibw_grid = ADULT_GRID["ibw"]
+time_to_grid = ADULT_GRID["time_to_cpb"]
+time_on_grid = ADULT_GRID["time_on_cpb"]
+prime_grid = ADULT_GRID["prime"]
 
-    combos = list(itertools.product(heparin_grid, ibw_grid, time_to_grid, time_on_grid, prime_grid))
-    total = len(combos)
-    
-    models = ["delavenne", "jia", "prodose", "prodose-2", "lanoiselee", "meesters"]
-    
+
+def _node_seed(seed, *parts):
+    """A reproducible per-node seed derived from the run seed and the node."""
+    digest = hashlib.blake2b(repr((seed,) + parts).encode(), digest_size=4).digest()
+    return int.from_bytes(digest, "big")
+
+
+def generate_v2_table_deterministic(seed=DEFAULT_SEED, n_sim=200,
+                                    evaluation_mode="reversal_endpoint",
+                                    prime_timing="lumped_t0",
+                                    paediatric_jia=True):
+    """Rebuild the per-model k lookup tables.
+
+    Now genuinely deterministic, which the name previously only claimed: each
+    grid node derives its own seed from `seed` and the node itself, so the same
+    command always produces the same tables (EB-6).
+
+    The paediatric Jia model is built over the paediatric grid rather than the
+    adult one (EB-4, R1 p11 L46). The `lo`/`hi` entries are the k values
+    obtained at time-on-CPB plus and minus two standard deviations -- a scenario
+    range, not an uncertainty interval, and the dashboard labels them as such.
+    """
     main_prog = st.progress(0.0)
     status_text = st.empty()
-    
-    for model in models:
-        k_table = {}
-        status_text.text(f"Generating table for {model}...")
-        
-        for i, (hpkg, ibw_m, tto_m, ton_m, p_hep) in enumerate(combos):
-            ibw_sd_val = 10.0
-            tto_sd_val = 0.25 * tto_m
-            ton_sd_val = 15.0
-            
-            # Helper to run optim
-            def get_k(t_on_val):
-                return find_best_k(hpkg, p_hep, ibw_m, ibw_sd_val, tto_m, tto_sd_val, t_on_val, ton_sd_val, 
-                                   model_name=model, n_sim=200)
 
-            k_mu = get_k(ton_m)
-            k_lo = get_k(ton_m - 2*ton_sd_val) # Slow elimination scenario
-            k_hi = get_k(ton_m + 2*ton_sd_val) # Fast elimination scenario
-            
-            vals = [k_mu, k_lo, k_hi]
+    for m_i, model in enumerate(MODEL_NAMES):
+        population = ("paediatric" if model in PAEDIATRIC_MODELS and paediatric_jia
+                      else "adult")
+        g = grid_for(population)
+        combos = list(itertools.product(g["dose_per_kg"], g["ibw"],
+                                        g["time_to_cpb"], g["time_on_cpb"],
+                                        g["prime"]))
+        k_table = {"__metadata__": {
+            "model": model, "population": population, "seed": seed,
+            "n_sim": n_sim, "grid": g, "evaluation_mode": evaluation_mode,
+            "prime_timing": prime_timing, "app_version": APP_VERSION,
+            "k_search_bounds": K_BOUNDS,
+            "lo_hi_meaning": "k recalibrated at time on CPB -/+ 2 SD; a scenario "
+                             "range, not an uncertainty interval",
+        }}
+        status_text.text(f"Generating {model} ({population}, {len(combos)} nodes)...")
+
+        for i, (hpkg, ibw_m, tto_m, ton_m, p_hep) in enumerate(combos):
+            ibw_sd_val = 10.0 if population == "adult" else 0.4 * ibw_m
+            tto_sd_val = 0.25 * tto_m
+            ton_sd_val = 15.0 if population == "adult" else 0.3 * ton_m
+            # A node-specific but fully determined seed. Python's built-in
+            # hash() is salted per process, so a stable digest is used instead --
+            # otherwise the "deterministic" table would differ between runs.
+            node_seed = _node_seed(seed, model, hpkg, ibw_m, tto_m, ton_m, p_hep)
+
+            def get_k(t_on_val):
+                return find_best_k(hpkg, p_hep, ibw_m, ibw_sd_val, tto_m, tto_sd_val,
+                                   max(t_on_val, 1.0), ton_sd_val, model_name=model,
+                                   n_sim=n_sim, seed=node_seed,
+                                   evaluation_mode=evaluation_mode,
+                                   prime_timing=prime_timing)
+
+            vals = [get_k(ton_m), get_k(ton_m - 2 * ton_sd_val), get_k(ton_m + 2 * ton_sd_val)]
             k_table[(hpkg, ibw_m, tto_m, ton_m, p_hep)] = {
-                'mu': k_mu, 'lo': min(vals), 'hi': max(vals)
-            }
-            
+                "mu": vals[0], "lo": min(vals), "hi": max(vals)}
+
             if i % 100 == 0:
-                main_prog.progress((i + 1) / total)
+                main_prog.progress((m_i + (i + 1) / len(combos)) / len(MODEL_NAMES))
 
         filename = f"k_table_v2_{model}.pkl"
         with open(filename, "wb") as f:
             pickle.dump(k_table, f)
-        st.success(f"Saved {filename}")
+        st.success(f"Saved {filename} ({len(combos)} nodes, {population} grid)")
+
+    main_prog.empty()
+    status_text.empty()
