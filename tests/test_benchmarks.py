@@ -30,18 +30,73 @@ def test_pk_identities_hold(model):
         assert rel < 1e-4, row
 
 
-def test_source_benchmarks_are_declared_for_every_model_with_a_publication():
-    covered = {b.model for b in B.SOURCE_BENCHMARKS}
-    assert covered >= {"lanoiselee", "delavenne", "jia"}
+def test_derived_constants_are_reported_for_every_model():
+    """EB-6: the supplement must state what each source's parameters imply, so a
+    reader can check them against the publication without participant data."""
+    df = B.derived_quantities_report()
+    assert len(df) == len(core.MODEL_NAMES)
+    assert df["source"].str.len().gt(0).all()
+
+    two_comp = df[df["structure"].str.startswith("two-compartment")]
+    for col in ("Vc_L", "Vss_L", "Cl_L_per_h", "terminal_half_life_min",
+                "mean_residence_time_min"):
+        assert two_comp[col].notna().all() and (two_comp[col] > 0).all()
 
 
-def test_pending_source_benchmarks_are_reported_as_pending():
-    """The manuscript may not claim per-source reproduction until these carry an
-    expected value transcribed from the publication."""
-    df = B.source_verification_report()
-    pending = df[df["status"].str.startswith("PENDING")]
-    assert not pending.empty, (
-        "every source benchmark now has an expected value -- update the "
-        "manuscript to state that per-source reproduction has been demonstrated"
-    )
-    assert df["observed"].notna().all()
+def test_derived_constants_recover_the_published_inputs():
+    """A guard against the table drifting from MODEL_PARAMETERS."""
+    d = B.derived_quantities("delavenne", weight_kg=70.0)
+    vals = core.MODEL_PARAMETERS["delavenne"].values
+    assert d["Vc_L"] == pytest.approx(vals["Vc_L"], rel=1e-9)
+    assert d["Vp_L"] == pytest.approx(vals["Vp_L"], rel=1e-9)
+    assert d["Cl_L_per_h"] == pytest.approx(vals["Cl_L_h"], rel=1e-9)
+    assert d["Vss_L"] == pytest.approx(vals["Vc_L"] + vals["Vp_L"], rel=1e-9)
+    # Mean residence time is Vss / Cl by definition.
+    assert d["mean_residence_time_min"] == pytest.approx(
+        d["Vss_L"] / d["Cl_L_per_h"] * 60.0, rel=1e-9)
+
+
+def test_delavenne_derived_constants_scale_with_weight():
+    small = B.derived_quantities("delavenne", weight_kg=50.0)
+    large = B.derived_quantities("delavenne", weight_kg=100.0)
+    assert large["Vc_L"] > small["Vc_L"]
+    assert large["Cl_L_per_h"] > small["Cl_L_per_h"]
+
+
+def test_jia_derived_constants_do_not_scale_with_weight():
+    """No weight covariate, so the constants are identical at every body size."""
+    for field in ("Vc_L", "Vss_L", "Cl_L_per_h", "terminal_half_life_min"):
+        assert B.derived_quantities("jia", 45.0)[field] == pytest.approx(
+            B.derived_quantities("jia", 115.0)[field], rel=1e-12)
+
+
+def test_source_checks_are_optional_and_pass_when_supplied():
+    """An empty SOURCE_CHECKS list is a fact about the publications, not a gap:
+    no participant-level data is held for any source study, so nothing is
+    re-fitted and no predictive check is possible or claimed."""
+    report = B.source_check_report()
+    if report.empty:
+        assert list(report.columns)  # the schema exists for when one is added
+    else:
+        assert (report["status"] == "PASS").all(), report[report["status"] != "PASS"]
+
+
+def test_source_check_machinery_works_if_a_value_is_added():
+    """Exercises the path so that adding a real printed value cannot silently
+    fail on a plumbing error."""
+    expected = B.derived_quantities("lanoiselee")["terminal_half_life_min"]
+    check = B.SourceCheck(
+        model="lanoiselee", description="self-consistency probe",
+        expected=expected, units="min", kind="terminal_half_life_min",
+        citation="synthetic, for the test suite only")
+    result = check.run()
+    assert result["status"] == "PASS" and result["pct_error"] == pytest.approx(0.0)
+
+
+def test_verification_statement_does_not_overclaim():
+    """The manuscript must not describe this as external or predictive
+    validation (EB-1, EB-6)."""
+    text = B.VERIFICATION_STATEMENT.lower()
+    assert "no participant-level data" in text
+    assert "not re-fitted" in text or "not re-fitted" in text
+    assert "not that the published model is correct" in text

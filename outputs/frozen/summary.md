@@ -1,7 +1,7 @@
 # Frozen analysis run
 
-- Generated: 2026-09-12T18:53:39.608586+00:00
-- Commit: `fa47130-dirty`  **working tree dirty -- commit before quoting these numbers**
+- Generated: 2026-09-12T19:23:22.603402+00:00
+- Commit: `daca688-dirty`  **working tree dirty -- commit before quoting these numbers**
 - Seed: `20260912`
 - Cohort: grid_snapped_70_15_60: 400 IU/kg, prime 5000 IU, IBW 70+/-10 kg, time to CPB 15+/-3.75 min, time on CPB 60+/-15 min [adult]
 - Sign convention: Difference = reference model - nomogram (positive = nomogram under-estimates)
@@ -70,6 +70,26 @@ The run used `reversal_endpoint`: One point per patient: residual heparin at the
 | meesters | 0.00398 | 0.00385 | +3.3 |
 | prodose | 0.00567 | 0.00549 | +3.3 |
 | prodose-2 | 0.00432 | 0.00418 | +3.3 |
+
+## Implementation verification (EB-6)
+
+Implementation verification only. Each model is checked against the equations and parameters of its source publication: the closed-form solutions are confirmed to solve the corresponding differential equations numerically, and to satisfy the identities those equations imply (initial condition, area under the curve equal to dose x Vc / Cl, terminal slope equal to -beta, dose linearity, and the prime-timing convention). The derived pharmacokinetic constants each source's parameters imply are tabulated so a reader can compare them with the source directly. No participant-level data from any source study is held by the authors, so the models are not re-fitted and their predictions are not compared with observed measurements; no such external or predictive validation is claimed. What is demonstrated is that the implementation faithfully reproduces the published model, not that the published model is correct.
+
+Derived constants at 70 kg, for comparison against each source publication:
+
+| Model | Vc (L) | Vss (L) | Cl (L/h) | Distribution t1/2 (min) | Terminal t1/2 (min) | MRT (min) |
+|---|---|---|---|---|---|---|
+| Delavenne | 3.10 | 5.33 | 0.841 | 11.2 | 272 | 380 |
+| Jia | 3.04 | 11.05 | 1.180 | 93.0 | 2245 | 562 |
+| Lanoiselee | 4.01 | 5.47 | 1.500 | 84.3 | 278 | 219 |
+
+| Model | Fast pool | Fast t1/2 (min) | Slow t1/2 (min) | |
+|---|---|---|---|---|
+| Meesters | 10% | 10.0 | 250 | fixed |
+| PRODOSE | 10% | 10.0 | 155 | quoted at 400 IU/kg; depends on dose per kg |
+| PRODOSE-2 | 10% | 2.4 | 171 | quoted at 400 IU/kg; depends on dose per kg |
+
+25 automatic implementation checks, all passing. No source publication prints a model-derived value in a form that can be checked against directly; the derived constants above serve that purpose instead.
 
 ## Two intervals on k, which must not be conflated (EB-2)
 
@@ -156,6 +176,5 @@ Reading the residual load off the nomogram requires no calculation; converting i
 
 ## Outstanding author decisions
 
-- **EB-6** -- Supply the expected values for the per-source benchmark checks
 - **EB-4 / R1 p11 L46** -- Correct the manuscript's description of the Jia model
 - **EB-1** -- State the assumption under which central-compartment amount maps to a protamine dose

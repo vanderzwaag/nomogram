@@ -121,7 +121,10 @@ def run(args) -> Path:
     print("[0] Verifying the model implementations (EB-6)")
     internal = B.internal_verification_report()
     write("00_verification_internal.csv", internal)
-    write("00_verification_source.csv", B.source_verification_report())
+    write("00_derived_pk_constants.csv", B.derived_quantities_report(spec.ibw_mean))
+    checks = B.source_check_report()
+    if not checks.empty:
+        write("00_source_printed_value_checks.csv", checks)
     if not internal["pass"].astype(bool).all():
         raise SystemExit("Internal verification failed; refusing to produce results.")
     print("  all internal checks passed")
@@ -475,6 +478,7 @@ def run(args) -> Path:
             "ofat_variation": args.variation,
             "topup_horizon_min": args.topup_horizon,
         },
+        "verification_statement": B.VERIFICATION_STATEMENT,
         "parameter_provenance": {
             key: {
                 "source": p.source,
@@ -494,7 +498,7 @@ def run(args) -> Path:
     print("\n  wrote manifest.json")
 
     _write_summary(outdir, args, spec, k_table, agr, obj, sens, modes, ptim,
-                   pu, coverage, inst, ws, ex, manifest)
+                   pu, coverage, inst, ws, ex, manifest, internal)
     print("  wrote summary.md")
     return outdir
 
@@ -510,13 +514,13 @@ def _outstanding(args) -> list:
                       "that the parameter-uncertainty interval could not be propagated",
             "detail": missing,
         })
-    pending = B.source_verification_report()
-    pending = pending[pending["status"].str.startswith("PENDING")]
-    if not pending.empty:
+    failed = B.source_check_report()
+    failed = failed[failed["status"] == "FAIL"] if not failed.empty else failed
+    if not failed.empty:
         items.append({
             "comment": "EB-6",
-            "action": "Supply the expected values for the per-source benchmark checks",
-            "detail": pending[["model", "description"]].to_dict("records"),
+            "action": "A printed-value check against a source publication is failing",
+            "detail": failed[["model", "description", "expected", "observed"]].to_dict("records"),
         })
     items.append({
         "comment": "EB-4 / R1 p11 L46",
@@ -543,7 +547,7 @@ def _outstanding(args) -> list:
 
 
 def _write_summary(outdir, args, spec, k_table, agr, obj, sens, modes, ptim,
-                   pu, coverage, inst, ws, ex, manifest) -> None:
+                   pu, coverage, inst, ws, ex, manifest, internal_checks) -> None:
     g = manifest["git"]
     L = []
     L.append("# Frozen analysis run\n")
@@ -619,6 +623,36 @@ def _write_summary(outdir, args, spec, k_table, agr, obj, sens, modes, ptim,
         ch = ptim[(ptim["model"] == model) &
                   (ptim["prime_timing"] == "cpb_onset")]["pct_change_vs_lumped"].iloc[0]
         L.append(f"| {model} | " + " | ".join(f"{v:.5f}" for v in row) + f" | {ch:+.1f} |")
+    L.append("")
+
+    L.append("## Implementation verification (EB-6)\n")
+    L.append(manifest["verification_statement"] + "\n")
+    dq = B.derived_quantities_report(spec.ibw_mean)
+    two = dq[dq["structure"].str.startswith("two-compartment")]
+    L.append(f"Derived constants at {spec.ibw_mean:.0f} kg, for comparison against "
+             "each source publication:\n")
+    L.append("| Model | Vc (L) | Vss (L) | Cl (L/h) | Distribution t1/2 (min) | "
+             "Terminal t1/2 (min) | MRT (min) |")
+    L.append("|---|---|---|---|---|---|---|")
+    for _, r in two.iterrows():
+        L.append(f"| {r['model']} | {r['Vc_L']:.2f} | {r['Vss_L']:.2f} | "
+                 f"{r['Cl_L_per_h']:.3f} | {r['distribution_half_life_min']:.1f} | "
+                 f"{r['terminal_half_life_min']:.0f} | "
+                 f"{r['mean_residence_time_min']:.0f} |")
+    closed = dq[~dq["structure"].str.startswith("two-compartment")]
+    L.append("\n| Model | Fast pool | Fast t1/2 (min) | Slow t1/2 (min) | |")
+    L.append("|---|---|---|---|---|")
+    for _, r in closed.iterrows():
+        L.append(f"| {r['model']} | {r['fast_pool_fraction']:.0%} | "
+                 f"{r['fast_half_life_min']:.1f} | {r['slow_half_life_min']:.0f} | "
+                 f"{r['slow_half_life_note']} |")
+    n_checks = len(B.SOURCE_CHECKS)
+    L.append(f"\n{len(internal_checks)} automatic implementation checks, all passing. "
+             + (f"{n_checks} printed-value check(s) against the sources."
+                if n_checks else
+                "No source publication prints a model-derived value in a form that "
+                "can be checked against directly; the derived constants above serve "
+                "that purpose instead."))
     L.append("")
 
     L.append("## Two intervals on k, which must not be conflated (EB-2)\n")

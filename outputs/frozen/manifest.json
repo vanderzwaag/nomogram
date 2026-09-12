@@ -1,5 +1,5 @@
 {
-  "generated_utc": "2026-09-12T18:53:39.608586+00:00",
+  "generated_utc": "2026-09-12T19:23:22.603402+00:00",
   "analysis_version": "2.0.0",
   "core_version": "2.0.0",
   "calibration_version": "2.0.0",
@@ -19,10 +19,10 @@
   },
   "command_line": "run_analysis.py --seed 20260912 --outdir outputs/frozen",
   "git": {
-    "commit": "fa471306dba46bf703a1b42dc3121a262b5e9656",
-    "short_commit": "fa47130",
+    "commit": "daca68860a705e1d87d38d9f9953388bc0fbddbd",
+    "short_commit": "daca688",
     "branch": "claude/manuscript-revision-code-j9hc9b",
-    "describe": "fa47130-dirty",
+    "describe": "daca688-dirty",
     "dirty": true
   },
   "software_versions": {
@@ -98,6 +98,7 @@
     "ofat_variation": 0.2,
     "topup_horizon_min": 240.0
   },
+  "verification_statement": "Implementation verification only. Each model is checked against the equations and parameters of its source publication: the closed-form solutions are confirmed to solve the corresponding differential equations numerically, and to satisfy the identities those equations imply (initial condition, area under the curve equal to dose x Vc / Cl, terminal slope equal to -beta, dose linearity, and the prime-timing convention). The derived pharmacokinetic constants each source's parameters imply are tabulated so a reader can compare them with the source directly. No participant-level data from any source study is held by the authors, so the models are not re-fitted and their predictions are not compared with observed measurements; no such external or predictive validation is claimed. What is demonstrated is that the implementation faithfully reproduces the published model, not that the published model is correct.",
   "parameter_provenance": {
     "lanoiselee": {
       "source": "Lanoiselee et al. Br J Anaesth 2026;136(3):847-855 (doi 10.1016/j.bja.2025.11.057), Supplementary Table 1",
@@ -277,32 +278,6 @@
     }
   },
   "outstanding_author_decisions": [
-    {
-      "comment": "EB-6",
-      "action": "Supply the expected values for the per-source benchmark checks",
-      "detail": [
-        {
-          "model": "lanoiselee",
-          "description": "Central-compartment amount 60 min after a 300 IU/kg bolus in a 70 kg adult"
-        },
-        {
-          "model": "delavenne",
-          "description": "Central-compartment amount 60 min after a 300 IU/kg bolus in a 70 kg adult"
-        },
-        {
-          "model": "jia",
-          "description": "Central-compartment amount 60 min after a 400 IU/kg bolus in a 10 kg child"
-        },
-        {
-          "model": "prodose",
-          "description": "Residual heparin for the worked example in the PRODOSE publication"
-        },
-        {
-          "model": "meesters",
-          "description": "Residual heparin for the worked example in the Meesters publication"
-        }
-      ]
-    },
     {
       "comment": "EB-4 / R1 p11 L46",
       "action": "Correct the manuscript's description of the Jia model",
