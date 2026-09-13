@@ -4,4 +4,3 @@ Jia,"Jia et al., Pharmacokinetic model of unfractionated heparin during and afte
 Lanoiselee,"Lanoiselee et al. Br J Anaesth 2026;136(3):847-855 (doi 10.1016/j.bja.2025.11.057), Supplementary Table 1",70.0,"two-compartment, first-order elimination",4.01112,1.4585899999999998,5.46971,1.50018,0.28757,0.006233421089371547,84.28857186544329,278.2894005686141,218.76214854217494,0.24930692674365265,,,,
 Meesters,Meesters et al.,70.0,closed-form biexponential in amount,,,,,,,,,,,0.1,10.002123817603827,250.0,fixed
 PRODOSE,PRODOSE nomogram (published closed-form expression),70.0,closed-form biexponential in amount,,,,,,,,,,,0.1,10.002123817603827,155.23296164921143,quoted at 400 IU/kg; depends on dose per kg
-PRODOSE-2,PRODOSE-2 (revised closed-form expression with circuit dilution),70.0,closed-form biexponential in amount,,,,,,,,,,,0.1,2.4346581684578337,171.19635126210713,quoted at 400 IU/kg; depends on dose per kg

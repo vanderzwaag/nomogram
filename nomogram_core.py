@@ -32,8 +32,21 @@ from typing import Callable, Dict, Sequence
 
 CORE_VERSION = "2.0.0"
 
-# All six reference models, in the order used throughout the manuscript.
-MODEL_NAMES = ("delavenne", "jia", "lanoiselee", "meesters", "prodose", "prodose-2")
+# Models withheld from the active pipeline, with the reason recorded alongside.
+# A withheld model keeps its implementation, its parameters and its tests -- it
+# simply does not appear in MODEL_NAMES, so it is absent from the dashboard, the
+# frozen analysis, the figures and the generated lookup tables. Moving a model
+# in or out is this one line; nothing is commented out, so the code cannot rot
+# unnoticed while it waits and the reason cannot drift away from the decision.
+PENDING_MODELS = {
+    "prodose-2": "pending validation and peer review",
+}
+
+# Every model the repository implements, in the order used throughout.
+ALL_MODEL_NAMES = ("delavenne", "jia", "lanoiselee", "meesters", "prodose", "prodose-2")
+
+# The models the pipeline actually runs.
+MODEL_NAMES = tuple(m for m in ALL_MODEL_NAMES if m not in PENDING_MODELS)
 
 # Display names, so the app and the analysis runner cannot disagree on spelling.
 DISPLAY_NAMES = {
@@ -326,8 +339,13 @@ def canonical_model_name(model_name: str) -> str:
     key = unicodedata.normalize("NFKD", model_name.strip().lower())
     key = "".join(c for c in key if not unicodedata.combining(c))
     if key not in MODEL_PARAMETERS:
-        raise ValueError(f"Unknown model: {model_name!r}. Known models: {MODEL_NAMES}")
+        raise ValueError(f"Unknown model: {model_name!r}. Known models: {ALL_MODEL_NAMES}")
     return key
+
+
+def pending_reason(model_name: str) -> str | None:
+    """Why a model is withheld from the active pipeline, or None if it is active."""
+    return PENDING_MODELS.get(canonical_model_name(model_name))
 
 
 # ==========================================================================

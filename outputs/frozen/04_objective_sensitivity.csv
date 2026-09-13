@@ -24,8 +24,3 @@ prodose,rmse,Root mean squared error (IU),0.0054797172824232274,126.493237668170
 prodose,mape,Mean absolute percentage error (%),0.005453726485801663,127.09606584864461,False,-0.8541728105695197
 prodose,mae,Mean absolute error (IU),0.005469991462382176,126.71814669671903,False,-0.5584842457890833
 prodose,asymmetric,"Asymmetric loss, under-estimation penalised 2:1",0.005425619837987775,127.75446884553858,False,-1.3651366174792936
-prodose-2,bland_altman,|bias| + 0.1 x LoA width (primary),0.004200463867684212,165.01681775972264,False,0.0
-prodose-2,rmse,Root mean squared error (IU),0.004183459675934562,165.687549122868,False,-0.40481699843841296
-prodose-2,mape,Mean absolute percentage error (%),0.004158617196128708,166.67732274208888,False,-0.9962392934134345
-prodose-2,mae,Mean absolute error (IU),0.004175204572609354,166.01514213392255,False,-0.6013453720953768
-prodose-2,asymmetric,"Asymmetric loss, under-estimation penalised 2:1",0.0041160660738035195,168.4004017747536,False,-2.009249371956198

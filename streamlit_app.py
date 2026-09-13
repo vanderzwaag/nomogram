@@ -23,6 +23,7 @@ from Nomogram_Models import (
 from nomogram_core import (
     DISPLAY_NAMES,
     MODEL_NAMES,
+    PENDING_MODELS,
     MODEL_PARAMETERS,
     canonical_model_name,
     reference_amount,
@@ -43,46 +44,11 @@ This application is an experimental informatics pipeline and technical proof-of-
 The predictive models, nomograms, and calculations provided by this software are strictly for educational and research purposes. They must **never** be used for clinical decision-making, patient care, or to dictate drug dosages. The user assumes all liability and risk associated with the use of this software. By continuing to use this application, you acknowledge and agree to these terms.
 """)
 
-# ==========================================
-# PEER REVIEW LOGIN GATE
-# ==========================================
-def check_password():
-    """Returns `True` if the user had the correct password."""
-
-    def password_entered():
-        """Checks whether a password entered by the user is correct."""
-        # Use st.secrets to securely check the password
-        if st.session_state["password"] == st.secrets["peer_review_password"]:
-            st.session_state["password_correct"] = True
-            del st.session_state["password"]  # Don't store password in session state
-        else:
-            st.session_state["password_correct"] = False
-
-    if "password_correct" not in st.session_state:
-        # First run, show input for password.
-        st.text_input(
-            "🔒 Peer Review Access: Please enter the password provided in the manuscript.", 
-            type="password", 
-            on_change=password_entered, 
-            key="password"
-        )
-        return False
-    elif not st.session_state["password_correct"]:
-        # Password incorrect, show input + error.
-        st.text_input(
-            "🔒 Peer Review Access: Please enter the password provided in the manuscript.", 
-            type="password", 
-            on_change=password_entered, 
-            key="password"
-        )
-        st.error("Password incorrect")
-        return False
-    else:
-        # Password correct.
-        return True
-
-if not check_password():
-    st.stop()
+# The peer-review password gate has been removed. EB-6 noted the contradiction
+# between describing the pipeline as open source and putting the dashboard
+# behind a password; the code is now publicly deposited, so the gate served no
+# purpose except to reproduce that contradiction. Nothing here is confidential:
+# every constant the tool displays is in the repository and in the supplement.
 
 # ==========================================
 # 1. SETUP & UTILS
@@ -561,6 +527,15 @@ k_table = load_k_table(model_choice)
 k_stats = get_k_stats(h_base, ibw_base, t_to_base, t_on_base, p_base, k_table,
                       model_name=model_choice)
 st.sidebar.caption(describe_k_table(k_table, model_choice))
+
+# A model held back is stated, not silently dropped: a reader comparing the
+# manuscript against the tool would otherwise not know whether it was withheld
+# or lost.
+for _pending, _reason in PENDING_MODELS.items():
+    st.sidebar.info(
+        f"**{DISPLAY_NAMES[_pending]}** is not offered here: {_reason}. "
+        "Its implementation, parameters and tests remain in the repository."
+    )
 k_mu, k_lo, k_hi = k_stats['mu'], k_stats['lo'], k_stats['hi']
 
 with tab_compare:

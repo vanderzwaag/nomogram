@@ -134,11 +134,6 @@ def dashboard():
     import matplotlib
     matplotlib.use("Agg")
 
-    # Password gate: the script calls check_password() and stops if it fails.
-    # Supply the secret so the body runs.
-    st.secrets = {"password": "x"}
-    st.session_state["password_correct"] = True
-
     import importlib
     try:
         importlib.import_module("streamlit_app")
@@ -159,15 +154,31 @@ def test_every_model_offered_uses_the_registry_spelling(dashboard):
     hardcoded list and spelled it without one."""
     labels = dashboard.calls.get("selectbox_labels", [])
     assert labels, "no model selector was rendered"
-    assert set(labels) == set(core.DISPLAY_NAMES.values())
+    assert set(labels) == {core.DISPLAY_NAMES[m] for m in core.MODEL_NAMES}
     assert "Lanoiselée" in labels
     assert "Lanoiselee" not in labels
 
 
-def test_model_checkboxes_cover_all_six_models(dashboard):
+def test_model_checkboxes_cover_every_active_model(dashboard):
     labelled = {a[0] for a, _ in dashboard.calls.get("checkbox", [])}
-    for name in core.DISPLAY_NAMES.values():
+    for model in core.MODEL_NAMES:
+        name = core.DISPLAY_NAMES[model]
         assert any(name in lab for lab in labelled), f"no checkbox mentions {name}"
+
+
+def test_withheld_models_are_absent_but_explained(dashboard):
+    """A model held back for validation must not be silently missing: a reviewer
+    comparing the manuscript's six models against the tool's five would
+    otherwise have no way to tell whether it was withheld or lost."""
+    assert core.PENDING_MODELS, "this test assumes at least one withheld model"
+    labels = dashboard.calls.get("selectbox_labels", [])
+    for model, reason in core.PENDING_MODELS.items():
+        assert core.DISPLAY_NAMES[model] not in labels
+        shown = " ".join(str(a[0]) for a in
+                         (dashboard.calls.get("caption", []) +
+                          dashboard.calls.get("info", [])) if a)
+        assert core.DISPLAY_NAMES[model] in shown and reason in shown, (
+            f"{model} is withheld but the dashboard never says so")
 
 
 def test_no_stale_model_spelling_anywhere_user_facing():
@@ -186,6 +197,16 @@ def test_dashboard_reads_the_shared_renderer_not_its_own():
         "the dashboard still defines its own nomogram; the printed and "
         "on-screen charts could diverge again"
     )
+
+
+def test_no_password_gate():
+    """EB-6: describing the pipeline as open source while putting the dashboard
+    behind a password was a contradiction, and the gate is gone."""
+    src = open("streamlit_app.py", encoding="utf-8").read()
+    body = "\n".join(line for line in src.splitlines()
+                      if not line.strip().startswith("#"))
+    for token in ("check_password", "st.secrets", "type=\"password\""):
+        assert token not in body, f"{token} still present"
 
 
 def test_dashboard_surfaces_parameter_uncertainty():

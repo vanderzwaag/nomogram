@@ -1,7 +1,7 @@
 # Frozen analysis run
 
-- Generated: 2026-09-13T11:42:57.651737+00:00
-- Commit: `b4e20c8-dirty`  **working tree dirty -- commit before quoting these numbers**
+- Generated: 2026-09-13T12:46:51.234129+00:00
+- Commit: `9820949-dirty`  **working tree dirty -- commit before quoting these numbers**
 - Seed: `20260912`
 - Cohort: grid_snapped_70_15_60: 400 IU/kg, prime 5000 IU, IBW 70+/-10 kg, time to CPB 15+/-3.75 min, time on CPB 60+/-15 min [adult]
 - Sign convention: Difference = reference model - nomogram (positive = nomogram under-estimates)
@@ -19,7 +19,6 @@
 | Lanoiselée | adult | 0.00703 | 0.00703 to 0.00703 | 99 |
 | Meesters | adult | 0.00386 | 0.00384 to 0.00387 | 180 |
 | PRODOSE | adult | 0.00550 | 0.00548 to 0.00551 | 126 |
-| PRODOSE-2 | adult | 0.00419 | 0.00418 to 0.00421 | 165 |
 
 The interval is a Monte Carlo sampling-precision interval. It does **not** quantify uncertainty in the published PK parameters, in the institutional input estimates, in model selection, or in an individual patient's prediction (EB-2).
 
@@ -32,7 +31,6 @@ The interval is a Monte Carlo sampling-precision interval. It does **not** quant
 | Lanoiselée | +4.80 | -176.4 to +186.0 | 0.38 | 2.0 | -0.0085 | 3e-21 | 100.0 |
 | Meesters | +9.99 | -806.1 to +826.1 | 1.35 | 4.7 | -0.0706 | 5e-77 | 98.2 |
 | PRODOSE | +9.59 | -696.6 to +715.8 | 1.32 | 4.8 | -0.0813 | 2.8e-147 | 99.3 |
-| PRODOSE-2 | +15.79 | -953.0 to +984.6 | 1.65 | 7.2 | -0.1320 | 2.1e-246 | 96.1 |
 
 The test cohort is a fresh draw from the same data-generating process, i.e. an internal resample, not an external validation cohort (EB-1).
 
@@ -45,7 +43,6 @@ The test cohort is a fresh draw from the same data-generating process, i.e. an i
 | lanoiselee | 0.00702 | 0.00703 | 0.00704 | 0.00704 | 0.00704 | 0.2% |
 | meesters | 0.00378 | 0.00386 | 0.00383 | 0.00382 | 0.00384 | 2.1% |
 | prodose | 0.00543 | 0.00550 | 0.00547 | 0.00545 | 0.00548 | 1.4% |
-| prodose-2 | 0.00412 | 0.00420 | 0.00418 | 0.00416 | 0.00418 | 2.0% |
 
 ## Calibration endpoint: single timepoint versus trajectory (EB-4)
 
@@ -56,7 +53,6 @@ The test cohort is a fresh draw from the same data-generating process, i.e. an i
 | lanoiselee | 0.00703 | 0.00690 | 0.00828 |
 | meesters | 0.00386 | 0.00442 | 0.00570 |
 | prodose | 0.00550 | 0.00602 | 0.00741 |
-| prodose-2 | 0.00419 | 0.00497 | 0.00645 |
 
 The run used `reversal_endpoint`: One point per patient: residual heparin at the reversal timepoint t = time to CPB + time on CPB. This is what the submitted analysis calibrated against; with it, the manuscript may claim agreement in residual amount at reversal, NOT reproduction of entire trajectories.
 
@@ -69,7 +65,6 @@ The run used `reversal_endpoint`: One point per patient: residual heparin at the
 | lanoiselee | 0.00726 | 0.00703 | +3.4 |
 | meesters | 0.00398 | 0.00385 | +3.3 |
 | prodose | 0.00567 | 0.00549 | +3.3 |
-| prodose-2 | 0.00432 | 0.00418 | +3.3 |
 
 ## Implementation verification (EB-6)
 
@@ -87,9 +82,8 @@ Derived constants at 70 kg, for comparison against each source publication:
 |---|---|---|---|---|
 | Meesters | 10% | 10.0 | 250 | fixed |
 | PRODOSE | 10% | 10.0 | 155 | quoted at 400 IU/kg; depends on dose per kg |
-| PRODOSE-2 | 10% | 2.4 | 171 | quoted at 400 IU/kg; depends on dose per kg |
 
-25 automatic implementation checks, all passing.
+24 automatic implementation checks, all passing.
 
 Reproduction of a simulation published in a source (Delavenne Figure 3, 70 kg patient). The figure contains no observed data, so it is a pure model prediction and needs no participant-level data to reproduce; the tolerance reflects the precision with which the figure can be read.
 
@@ -115,7 +109,6 @@ The sampling-precision interval repeats the simulation with fresh cohorts drawn 
 | Lanoiselée | 0.00703 | 0.00703 to 0.00703 | 0.00626 to 0.00777 | 183x wider | published %RSE |
 | Meesters | 0.00386 | 0.00384 to 0.00387 | not propagated | -- | closed-form expression; none published |
 | PRODOSE | 0.00550 | 0.00548 to 0.00551 | not propagated | -- | closed-form expression; none published |
-| PRODOSE-2 | 0.00419 | 0.00418 to 0.00421 | not propagated | -- | closed-form expression; none published |
 
 Every interval above is propagated from uncertainty the source publications actually report: the asymptotic %RSE for Lanoiselee and Delavenne, and the non-parametric bootstrap interval for Jia, which publishes one. For Delavenne the draw includes the weight exponent on clearance (0.767, 29% RSE); because that covariate is centred on 70 kg its contribution is zero at the canonical cohort's IBW and reaches about 25% on clearance at the ends of the weight grid, so it moves the boundary and transportability results rather than this table.
 
@@ -128,20 +121,17 @@ Every interval above is propagated from uncertainty the source publications actu
 | lanoiselee | full_range | 2304 | 1.86 | 11.4 | 250 IU/kg, 40 kg, prime 10000, 35+30 min |
 | meesters | full_range | 2304 | 3.90 | 15.6 | 600 IU/kg, 115 kg, prime 10000, 35+120 min |
 | prodose | full_range | 2304 | 8.79 | 29.7 | 600 IU/kg, 115 kg, prime 10000, 35+120 min |
-| prodose-2 | full_range | 2304 | 6.33 | 25.6 | 600 IU/kg, 115 kg, prime 10000, 35+120 min |
 | delavenne | boundary | 32 | 32.87 | 67.4 | 600 IU/kg, 115 kg, prime 10000, 35+120 min |
 | jia | boundary | 32 | 2.75 | 11.5 | 250 IU/kg, 40 kg, prime 10000, 35+30 min |
 | lanoiselee | boundary | 32 | 2.30 | 11.4 | 250 IU/kg, 40 kg, prime 10000, 35+30 min |
 | meesters | boundary | 32 | 5.27 | 15.6 | 600 IU/kg, 115 kg, prime 10000, 35+120 min |
 | prodose | boundary | 32 | 14.63 | 29.7 | 600 IU/kg, 115 kg, prime 10000, 35+120 min |
-| prodose-2 | boundary | 32 | 9.43 | 25.6 | 600 IU/kg, 115 kg, prime 10000, 35+120 min |
 
 ## Supplemental-bolus grid, worst case and mean (EB-5)
 
 | Model | Scenarios | Mean abs error (%) | Worst abs error (%) | Worst abs error (IU) | Worst-case scenario |
 |---|---|---|---|---|---|
 | delavenne | 18 | 35.27 | 72.1 | 11619 | 3 x 10000 IU at 45/90/135 min |
-| prodose-2 | 18 | 6.56 | 16.2 | 3279 | 3 x 10000 IU at 45/90/135 min |
 | meesters | 18 | 6.51 | 16.0 | 3482 | 3 x 10000 IU at 45/90/135 min |
 | prodose | 18 | 5.91 | 15.2 | 2217 | 3 x 10000 IU at 45/90/135 min |
 | lanoiselee | 18 | 1.33 | 6.6 | 524 | 10000 IU at 30 min |
@@ -151,17 +141,17 @@ Every interval above is propagated from uncertainty the source publications actu
 
 Mean absolute percentage error when the canonically calibrated k is applied unchanged to a shifted population. Adult models are not run All six models are adult and are evaluated in the same populations; the small_bodied_adults row matches the body size the Jia model was derived in (EB-4, R1 p11 L46).
 
-| Institution | delavenne | jia | lanoiselee | meesters | prodose | prodose-2 |
-|---|---|---|---|---|---|---|
-| heavier_population | 12.34 | 0.53 | 0.47 | 1.36 | 1.34 | 2.19 |
-| high_dose | 9.63 | 0.73 | 0.71 | 1.53 | 8.30 | 5.50 |
-| lighter_population | 14.51 | 0.57 | 0.55 | 1.41 | 1.44 | 2.51 |
-| long_bypass | 30.94 | 1.08 | 0.70 | 5.31 | 5.08 | 5.58 |
-| low_dose_no_prime | 9.98 | 1.81 | 1.72 | 2.41 | 12.14 | 7.38 |
-| short_bypass | 17.00 | 0.60 | 0.44 | 2.33 | 2.14 | 2.67 |
-| slow_start | 15.77 | 2.19 | 2.51 | 3.23 | 3.75 | 3.57 |
-| small_bodied_adults | 12.70 | 0.52 | 0.49 | 1.38 | 1.39 | 2.21 |
-| wide_case_mix | 21.92 | 1.10 | 1.24 | 3.54 | 3.55 | 4.05 |
+| Institution | delavenne | jia | lanoiselee | meesters | prodose |
+|---|---|---|---|---|---|
+| heavier_population | 12.34 | 0.53 | 0.47 | 1.36 | 1.34 |
+| high_dose | 9.63 | 0.73 | 0.71 | 1.53 | 8.30 |
+| lighter_population | 14.51 | 0.57 | 0.55 | 1.41 | 1.44 |
+| long_bypass | 30.94 | 1.08 | 0.70 | 5.31 | 5.08 |
+| low_dose_no_prime | 9.98 | 1.81 | 1.72 | 2.41 | 12.14 |
+| short_bypass | 17.00 | 0.60 | 0.44 | 2.33 | 2.14 |
+| slow_start | 15.77 | 2.19 | 2.51 | 3.23 | 3.75 |
+| small_bodied_adults | 12.70 | 0.52 | 0.49 | 1.38 | 1.39 |
+| wide_case_mix | 21.92 | 1.10 | 1.24 | 3.54 | 3.55 |
 
 ## Most influential inputs, +/-20% (EB-8)
 
@@ -172,7 +162,6 @@ Mean absolute percentage error when the canonically calibrated k is applied unch
 | lanoiselee | 0.66 | 0.06 | 0.33 | 0.08 | 0.68 | 0.06 |
 | meesters | 1.65 | 0.46 | 5.39 | 0.57 | 1.99 | 0.64 |
 | prodose | 1.29 | 0.31 | 3.54 | 0.39 | 1.58 | 0.43 |
-| prodose-2 | 5.36 | 0.38 | 5.32 | 0.62 | 1.87 | 0.61 |
 
 ## Worked example (EB-8)
 

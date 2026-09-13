@@ -20,6 +20,8 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+import math
+
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -32,8 +34,37 @@ import parameter_spaces as ps
 # Categorical slots, in the fixed validated order. Assigned to models once and
 # never re-ordered, so a model keeps its colour across every figure.
 SLOTS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300"]
-MODEL_ORDER = ["lanoiselee", "delavenne", "jia", "meesters", "prodose", "prodose-2"]
-COLOUR = dict(zip(MODEL_ORDER, SLOTS))
+# Colour is assigned from the full registry, so a model keeps its hue whether or
+# not it is currently active -- a withheld model returning must not repaint the
+# others.
+_ALL_ORDER = ["lanoiselee", "delavenne", "jia", "meesters", "prodose", "prodose-2"]
+COLOUR = dict(zip(_ALL_ORDER, SLOTS))
+MODEL_ORDER = [m for m in _ALL_ORDER if m in core.MODEL_NAMES]
+
+
+def _grid(n, width, height):
+    """Panel grid sized to the number of active models, with spares hidden.
+
+    Returns the bottom-most *visible* axis of each column as well. With shared
+    x-axes matplotlib labels only the last row, so a column whose bottom panel
+    is a hidden spare would otherwise lose its tick labels entirely.
+    """
+    cols = 3 if n > 4 else (2 if n > 1 else 1)
+    rows = math.ceil(n / cols)
+    fig, axes = plt.subplots(rows, cols, figsize=(width, height * rows / 2),
+                             sharex=True, sharey=True, squeeze=False)
+    flat = axes.ravel()
+    for spare in flat[n:]:
+        spare.set_visible(False)
+
+    bottom = []
+    for c in range(cols):
+        column = [flat[r * cols + c] for r in range(rows) if r * cols + c < n]
+        if column:
+            ax = column[-1]
+            ax.tick_params(labelbottom=True)
+            bottom.append(ax)
+    return fig, flat, bottom
 
 INK, INK_2, INK_3 = "#0b0b0b", "#52514e", "#8a8880"
 GRID, SURFACE = "#e8e8e4", "#ffffff"
@@ -80,8 +111,8 @@ def figure_s1(k, spec, outdir):
     t_to, t_end = spec.t_to_mean, spec.t_to_mean + spec.t_on_mean
     t = np.linspace(0, 120, 601)
 
-    fig, axes = plt.subplots(2, 3, figsize=(7.2, 4.4), sharex=True, sharey=True)
-    for ax, model in zip(axes.ravel(), MODEL_ORDER):
+    fig, flat, bottom_axes = _grid(len(MODEL_ORDER), 7.2, 4.4)
+    for ax, model in zip(flat, MODEL_ORDER):
         ref = core.reference_amount_array(model, t, bolus, prime, spec.ibw_mean, t_to)
         nom = core.simplified_amount_array(t, bolus, prime, k[model], t_to)
 
@@ -99,19 +130,20 @@ def figure_s1(k, spec, outdir):
         ax.set_xlim(0, 120)
         ax.set_ylim(0, 35)
 
-    axes[0, 0].text(t_end + 2, 33.5, "reversal", fontsize=6.5, color=INK_3)
+    flat[0].text(t_end + 2, 33.5, "reversal", fontsize=6.5, color=INK_3)
     # The offset before CPB onset is the prime-timing convention, not an error:
     # the reference models introduce prime heparin at bypass onset while the
     # printed nomogram necessarily lumps it into the load from induction (EB-5).
-    axes[0, 0].annotate("prime enters at\nCPB onset", xy=(t_to, 27.6),
+    flat[0].annotate("prime enters at\nCPB onset", xy=(t_to, 27.6),
                         xytext=(t_to + 12, 15.5), fontsize=6.5, color=INK_3,
                         linespacing=1.4,
                         arrowprops=dict(arrowstyle="-", color=INK_3, lw=0.7))
-    for ax in axes[1, :]:
+    for ax in bottom_axes:
         ax.set_xlabel("Time from induction (min)")
-    for ax in axes[:, 0]:
-        ax.set_ylabel("Heparin in central\ncompartment (×1000 IU)")
-    axes[0, 0].legend(loc="lower right", bbox_to_anchor=(1.0, 0.02))
+    for ax in flat[::3]:
+        if ax.get_visible():
+            ax.set_ylabel("Heparin in central\ncompartment (×1000 IU)")
+    flat[0].legend(loc="lower right", bbox_to_anchor=(1.0, 0.02))
     fig.tight_layout(w_pad=1.4, h_pad=1.2)
     save(fig, outdir, "figure_S1_decay_trajectories")
 
@@ -249,11 +281,17 @@ def figure_s4(sens, outdir):
     labels = {"ibw_mean": "Mean IBW", "ibw_sd": "SD of IBW",
               "t_to_mean": "Mean time to CPB", "t_to_sd": "SD of time to CPB",
               "t_on_mean": "Mean time on CPB", "t_on_sd": "SD of time on CPB"}
+    # Listed bottom-to-top, since barh puts index 0 at the bottom: the
+    # influential means sit low and the negligible SD terms high, which keeps
+    # the top-left annotation corner free in every panel. Do NOT reach for
+    # invert_yaxis() -- the axes are shared, so it applies once per call and
+    # flips the whole grid an odd or even number of times depending on how many
+    # models are active. With six models that cancelled out and hid the bug.
     order = ["ibw_mean", "t_on_mean", "t_to_mean", "ibw_sd", "t_on_sd", "t_to_sd"]
     limit = np.ceil(sens["pct_change"].abs().max() / 5) * 5
 
-    fig, axes = plt.subplots(2, 3, figsize=(7.2, 4.2), sharex=True, sharey=True)
-    for ax, model in zip(axes.ravel(), MODEL_ORDER):
+    fig, flat, bottom_axes = _grid(len(MODEL_ORDER), 7.2, 4.2)
+    for ax, model in zip(flat, MODEL_ORDER):
         sub = sens[sens["model"] == model]
         y = np.arange(len(order))
         for direction, hatch in (("low", None), ("high", "////")):
@@ -270,7 +308,6 @@ def figure_s4(sens, outdir):
         ax.set_title(core.DISPLAY_NAMES[model], pad=4)
         tidy(ax, grid_axis="x")
         ax.set_xlim(-limit, limit)
-        ax.invert_yaxis()
 
         # Top row is an SD parameter, whose bars are negligible in every panel,
         # so this corner is free of marks for all six models.
@@ -279,7 +316,7 @@ def figure_s4(sens, outdir):
                 transform=ax.transAxes, ha="left", va="top",
                 fontsize=7.5, color=INK_2)
 
-    for ax in axes[1, :]:
+    for ax in bottom_axes:
         ax.set_xlabel("Change in calibrated $k$ (%)")
     # Neutral swatches: the legend encodes direction (solid vs hatched) only.
     # Borrowing a panel's hue would imply the colour carried meaning here too.

@@ -4,4 +4,3 @@ jia,True,estimate,published bootstrap 95% CI,published bootstrap 95% CI,publishe
 lanoiselee,True,estimate,published %RSE of the estimate,,,,,,,0.007047364310913051,0.007059271567714326,0.00039334995948645023,0.0062594171415345165,0.007768090966768901,98.35551987664189,200.0,published %RSE of the estimate,published %RSE of the estimate,published %RSE of the estimate,published %RSE of the estimate
 meesters,False,estimate,Meesters is a closed-form expression published without parameter uncertainty; no interval can be propagated for it.,,,,,,,,,,,,,,,,,
 prodose,False,estimate,PRODOSE is a closed-form expression published without parameter uncertainty; no interval can be propagated for it.,,,,,,,,,,,,,,,,,
-prodose-2,False,estimate,PRODOSE-2 is a closed-form expression published without parameter uncertainty; no interval can be propagated for it.,,,,,,,,,,,,,,,,,
