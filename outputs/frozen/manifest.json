@@ -1,7 +1,8 @@
 {
-  "generated_utc": "2026-09-13T09:44:44.854860+00:00",
+  "generated_utc": "2026-09-13T11:42:57.651737+00:00",
   "analysis_version": "2.0.0",
   "core_version": "2.0.0",
+  "render_version": "2.0.0",
   "calibration_version": "2.0.0",
   "seed": 20260912,
   "seed_streams": {
@@ -19,10 +20,10 @@
   },
   "command_line": "run_analysis.py --seed 20260912 --outdir outputs/frozen",
   "git": {
-    "commit": "36ad3dccb99137a87ec0b0267d8b5bf3107a2f81",
-    "short_commit": "36ad3dc",
+    "commit": "b4e20c847609bc2693400b5552a22954cbfdf7ac",
+    "short_commit": "b4e20c8",
     "branch": "claude/manuscript-revision-code-j9hc9b",
-    "describe": "36ad3dc-dirty",
+    "describe": "b4e20c8-dirty",
     "dirty": true
   },
   "software_versions": {
@@ -32,8 +33,7 @@
     "scipy": "1.17.1",
     "pandas": "3.0.5",
     "matplotlib": "3.11.2",
-    "streamlit": "not installed in the analysis environment",
-    "pynomo": "not installed in the analysis environment"
+    "streamlit": "not installed in the analysis environment"
   },
   "decisions": {
     "canonical_cohort": "grid_snapped",

@@ -1,15 +1,11 @@
-# Dashboard and nomogram rendering
+# Dashboard
 streamlit
-pynomo
-matplotlib
-pyx
-PyPDF2
-reportlab
 
-# Analysis pipeline (run_analysis.py, calibration.py, agreement.py)
+# Analysis pipeline, figures and nomogram rendering
 numpy
 scipy
 pandas
+matplotlib
 
-# Test suite (tests/)
+# Test suite
 pytest

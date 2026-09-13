@@ -1,15 +1,9 @@
 import hashlib
 import math
 import numpy as np
-from pynomo.nomographer import Nomographer
 from scipy.optimize import minimize_scalar
 import matplotlib.pyplot as plt
 import streamlit as st
-from PyPDF2 import PdfReader, PdfWriter
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import A4
-from io import BytesIO
-from reportlab.lib.units import cm
 import pickle
 import itertools
 import pandas as pd
@@ -181,74 +175,54 @@ def summarize_k_distribution(k_values):
     s = summarise_k(k_values)
     return s["k_mean"], s["k_p2_5"], s["k_p97_5"]
 # ==========================================
-# NOMOGRAM PDF GENERATION
+# NOMOGRAM RENDERING
 # ==========================================
+#
+# The chart geometry lives in nomogram_render and is shared by the printed PDF
+# and the interactive chart, so the two cannot disagree. The previous
+# implementation drew the PDF with PyNomo (which pulls in PyX, LaTeX and
+# Ghostscript) from one decay constant, while the dashboard drew its own
+# matplotlib chart from a different one -- the same "several constants in
+# circulation" defect that EB-3 was about, surviving in the drawing layer.
 
-def build_nomogram(k_value):
-    output_filename = "heparin_dose_decay_nomogram.pdf"
-    main_params = {
-        'filename': output_filename,
-        'paper_height': 27.0,
-        'paper_width': 15.0,
-        'block_params': [{
-            'block_type': 'type_1',
-            'f1_params': {
-                'u_min': 20, 'u_max': 55,
-                'function': lambda dose: math.log(dose),
-                'title': r'Initial Heparin Dose (*1000 IU)',
-                'tick_levels': 3, 'tick_text_levels': 2,
-            },
-            'f2_params': {
-                'u_min': 0, 'u_max': 120,
-                'function': lambda t, k=k_value: -k * t,
-                'title': r'Time (minutes)',
-                'tick_levels': 2, 'tick_text_levels': 1,
-            },
-            'f3_params': {
-                'u_min': 10, 'u_max': 45,
-                'function': lambda remaining: -math.log(remaining),
-                'title': r'Remaining Heparin (*1000 IU)',
-                'tick_levels': 3, 'tick_text_levels': 2,
-            },
-        }]
-    }
-    Nomographer(main_params)
-    return output_filename
+from nomogram_render import (                                   # noqa: E402
+    NomogramGeometry,
+    build_geometry,
+    draw_nomogram,
+    footer_for,
+    render_pdf,
+)
 
-def center_pdf_on_a4(input_pdf, output_pdf):
-    reader = PdfReader(input_pdf)
-    writer = PdfWriter()
-    a4_width, a4_height = map(float, A4)
-    for page in reader.pages:
-        orig_width = float(page.mediabox.width)
-        orig_height = float(page.mediabox.height)
-        x_margin = (a4_width - orig_width) / 2.0
-        y_margin = (a4_height - orig_height) / 2.0
-        page.mediabox.lower_left = (float(page.mediabox.lower_left[0])-x_margin, float(page.mediabox.lower_left[1])-y_margin)
-        page.mediabox.upper_right = (float(page.mediabox.upper_right[0])+x_margin, float(page.mediabox.upper_right[1])+y_margin)
-        writer.add_page(page)
-    with open(output_pdf, "wb") as f:
-        writer.write(f)
 
-def add_footer_to_pdf(input_pdf, output_pdf, footer_text):
-    reader = PdfReader(input_pdf)
-    writer = PdfWriter()
-    for page in reader.pages:
-        packet = BytesIO()
-        can = canvas.Canvas(packet, pagesize=A4)
-        can.setFont("Helvetica", 8)
-        lines = footer_text.split('\n')
-        y_position = 50 # Example starting Y coordinate near the bottom
-        for line in lines:
-            can.drawString(0, y_position, line) # c is your reportlab canvas
-            y_position -= 15 # move down for the next line
-        can.save()
-        packet.seek(0)
-        overlay = PdfReader(packet).pages[0]
-        page.merge_page(overlay)
-        writer.add_page(page)
-    with open(output_pdf, "wb") as f:
-        writer.write(f)
+def nomogram_geometry_for(k, initial_dose_per_kg, prime_heparin, ibw_mean,
+                          t_max=120.0, span=0.25):
+    """Size a chart around one institution's typical total load.
+
+    The dose axis spans ``span`` either side of the baseline load. Narrower is
+    better for legibility as well as coverage: the residual axis must cover the
+    dose range times the decay over the whole time range, so the elapsed-time
+    axis gets the fraction (dr - dd) / 2dr of the sheet, where dd and dr are the
+    decades each outer axis spans. Widening the dose range shrinks the time
+    axis. +/-25% of the baseline load covers the patients an institution
+    actually sees while leaving the time axis readable.
+    """
+    baseline = initial_dose_per_kg * ibw_mean + prime_heparin
+    return build_geometry(k, d0_min=baseline * (1.0 - span),
+                          d0_max=baseline * (1.0 + span), t_max=t_max)
+
+
+def build_nomogram(k_value, output_filename="heparin_dose_decay_nomogram.pdf",
+                   d0_min=15000.0, d0_max=50000.0, t_max=120.0,
+                   footer_lines=(), title=None, patient=None):
+    """Render a nomogram PDF for one decay constant.
+
+    Kept under its original name so existing callers are unaffected; it no
+    longer requires PyNomo, PyX, LaTeX or Ghostscript.
+    """
+    geom = build_geometry(k_value, d0_min=d0_min, d0_max=d0_max, t_max=t_max)
+    return render_pdf(geom, output_filename, footer_lines=footer_lines,
+                      title=title, patient=patient)
+
 
 # ==========================================
 # PLOTTING & UTILS
@@ -554,22 +528,20 @@ def run_nomogram(initial_dose_per_kg, t_to_mean, prime_heparin,
         "R² (descriptive only)": agreement["descriptive_r_squared"],
     }
 
-    # 4. Figures and the printed nomogram -- all using the same k_best.
-    build_nomogram(k_best)
-    center_pdf_on_a4("heparin_dose_decay_nomogram.pdf", "nomogram_a4.pdf")
-    footer_text = (
-        f"Reference model: {model_name}. k={k_best:.5f}/min "
-        f"(Monte Carlo sampling interval {ci_low:.5f}-{ci_high:.5f}).\n"
-        f"Initial heparin: {initial_dose_per_kg} IU/kg, heparin in prime: {prime_heparin} IU, "
-        f"time to CPB: {t_to_mean}+/-{t_to_sd} min, time on CPB: {t_on_mean}+/-{t_on_sd} min, "
-        f"IBW: {ibw_mean}+/-{ibw_sd} kg.\n"
-        f"Calibration endpoint: {evaluation_mode}; prime timing: {prime_timing}; "
-        f"seed {seed}. {APP_VERSION}\n"
-        f"Research and educational instrument. Estimates pharmacokinetic residual "
-        f"heparin only; converting it to a protamine dose requires the institutional ratio."
-    )
+    # 4. Figures and the printed nomogram -- all using the same k_best, and now
+    #    the same geometry as the interactive chart.
+    spec_text = (f"Initial heparin {initial_dose_per_kg} IU/kg, prime {prime_heparin} IU, "
+                 f"time to CPB {t_to_mean}+/-{t_to_sd} min, "
+                 f"time on CPB {t_on_mean}+/-{t_on_sd} min, "
+                 f"IBW {ibw_mean}+/-{ibw_sd} kg.  "
+                 f"Calibration endpoint {evaluation_mode}; prime timing {prime_timing}.")
+    geom = nomogram_geometry_for(k_best, initial_dose_per_kg, prime_heparin, ibw_mean)
     pdf_path = "nomogram_final.pdf"
-    add_footer_to_pdf("nomogram_a4.pdf", pdf_path, footer_text)
+    render_pdf(geom, pdf_path,
+               title=f"Heparin decay nomogram - {model_name}",
+               footer_lines=footer_for(model_name, k_best, spec_text, seed=seed,
+                                       interval=(ci_low, ci_high),
+                                       version=APP_VERSION))
 
     fig_ba = bland_altman_plot(ref_doses, test_doses, model_label=model_name,
                                threshold_iu=threshold_iu)

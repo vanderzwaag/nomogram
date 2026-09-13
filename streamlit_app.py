@@ -5,8 +5,13 @@ import matplotlib.pyplot as plt
 import math
 import pickle
 import itertools
+import pandas as pd
+
+from calibration import parameter_uncertainty, summarise_k
 from Nomogram_Models import (
     DEFAULT_SEED,
+    _spec,
+    nomogram_geometry_for,
     run_nomogram,
     prodose_dose,
     lanoiselee_dose,
@@ -15,7 +20,15 @@ from Nomogram_Models import (
     jia_response,
     generate_v2_table_deterministic,
 )
-from nomogram_core import MODEL_PARAMETERS, reference_amount, reference_amount_with_topups
+from nomogram_core import (
+    DISPLAY_NAMES,
+    MODEL_NAMES,
+    MODEL_PARAMETERS,
+    canonical_model_name,
+    reference_amount,
+    reference_amount_with_topups,
+)
+from nomogram_render import draw_nomogram
 from agreement import SIGN_CONVENTION_LABEL, difference
 from parameter_spaces import ADULT_GRID, describe_grids
 
@@ -77,6 +90,19 @@ if not check_password():
 st.set_page_config(layout="wide", page_title="Heparin Decay Dashboard")
 APP_VERSION = "v1.2.0"
 
+# Model identity comes from one registry. The dashboard previously carried six
+# separate hardcoded lists, which is how the sidebar ended up spelling
+# "Lanoiselee" without the acute accent while the reports and figures spelled it
+# correctly (R1).
+MODEL_KEYS = list(MODEL_NAMES)
+# The three population-PK models, the only ones with published variability.
+CRI_MODELS_ALL = ("lanoiselee", "delavenne", "jia")
+
+
+def display_name(key_or_label):
+    return DISPLAY_NAMES[canonical_model_name(key_or_label)]
+
+
 # Define your "hardcoded" defaults
 DEFAULTS = {
     "ibw_base": 70,
@@ -84,7 +110,7 @@ DEFAULTS = {
     "p_base": 5000,
     "t_to_base": 15,
     "t_on_base": 60,
-    "model_choice": "Lanoiselee"
+    "model_choice": "lanoiselee"
 }
 
 for key, val in DEFAULTS.items():
@@ -111,7 +137,7 @@ def load_k_table(model_name):
     the unseeded pipeline and cannot be reproduced, so it must not be used for
     anything quoted in the manuscript (EB-6).
     """
-    filename = f"k_table_v2_{model_name.lower()}.pkl"
+    filename = f"k_table_v2_{canonical_model_name(model_name)}.pkl"
     try:
         with open(filename, "rb") as f:
             return pickle.load(f)
@@ -149,7 +175,7 @@ def get_k_stats(hpkg, ibw_val, tto, ton, prime_val, table, model_name=None):
     if table is None:
         st.error(
             f"No lookup table found for {model_name or 'this model'} "
-            f"(expected k_table_v2_{(model_name or '').lower()}.pkl). "
+            f"(expected k_table_v2_{canonical_model_name(model_name or 'lanoiselee')}.pkl). "
             "Use 'Regenerate Lookup Tables' in the sidebar. No default decay "
             "constant is substituted: a wrong k would propagate silently into "
             "every figure on this page."
@@ -482,9 +508,10 @@ def get_jia_cri(initial_bolus, additional_boluses, patient_weight,
 # ==========================================
 st.sidebar.header("Configuration")
 
-model_idx = 0 if st.session_state.model_choice == "PRODOSE" else 1
-model_choice = st.sidebar.selectbox("Reference Model", ["Delavenne", "Jia", "Lanoiselee", "Meesters", "PRODOSE", "PRODOSE-2"], 
-                                    index=model_idx, key="k_model")
+model_idx = MODEL_KEYS.index(canonical_model_name(st.session_state.model_choice))
+model_choice = st.sidebar.selectbox(
+    "Reference Model", MODEL_KEYS, index=model_idx,
+    format_func=display_name, key="k_model")
 st.session_state.model_choice = model_choice
 
 st.sidebar.header("1. Institutional Baseline")
@@ -538,8 +565,14 @@ k_mu, k_lo, k_hi = k_stats['mu'], k_stats['lo'], k_stats['hi']
 
 with tab_compare:
     # Models to compare
-    comp_models = ["Lanoiselee", "Delavenne", "Jia", "Meesters", "PRODOSE", "PRODOSE-2"]
-    
+    # Colour follows the model and is fixed, so a model keeps its hue whichever
+    # subset is displayed. Same slots and order as the supplementary figures.
+    comp_models = MODEL_KEYS
+    SERIES_COLOUR = dict(zip(
+        ["lanoiselee", "delavenne", "jia", "meesters", "prodose", "prodose-2"],
+        ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300"]))
+    CRI_MODELS = CRI_MODELS_ALL
+
     # Prepare data inputs based on sidebar "Plot My Patient" values
     c_ibw = pat_ibw
     c_bolus_kg = pat_h_kg
@@ -548,36 +581,25 @@ with tab_compare:
     c_t_to = pat_t_to
     c_t_on = pat_t_on
     c_end_time = c_t_to + c_t_on
-    
-    # --- NEW: Model Selection Row ---
-    st.markdown("##### Select Models to Display")
-    m_col1, m_col2, m_col3, m_col4, m_col5, m_col6 = st.columns(6)
-    
-    with m_col1:
-        show_lan = st.checkbox("Lanoiselee", value=True)
-    with m_col2:
-        show_del = st.checkbox("Delavenne", value=True)
-    with m_col3:
-        show_jia = st.checkbox("Jia", value=True)
-    with m_col4:
-        show_mee = st.checkbox("Meesters", value=True)
-    with m_col5:
-        show_pro = st.checkbox("PRODOSE", value=True)
-    with m_col6:
-        show_pro2 = st.checkbox("PRODOSE-2", value=True)
 
-    # 2. Credible Intervals Toggles row (Existing)
-    st.markdown("##### 95% Credible Intervals (CrI) Display")
-    t_col1, t_col2, t_col3, _ = st.columns([1, 1, 1, 1.5])
-    
-    # Only show CrI checkbox if the parent model is actually selected (optional UI polish)
-    with t_col1:
-        show_lan_cri = st.checkbox("Lanoiselee CrI", value=False, disabled=not show_lan)
-    with t_col2:
-        show_del_cri = st.checkbox("Delavenne CrI", value=False, disabled=not show_del)
-    with t_col3:
-        show_jia_cri = st.checkbox("Jia CrI", value=False, disabled=not show_jia)
-    
+    st.markdown("##### Select models to display")
+    visibility_map = {}
+    for col, model in zip(st.columns(len(comp_models)), comp_models):
+        with col:
+            visibility_map[model] = st.checkbox(display_name(model), value=True,
+                                                key=f"show_{model}")
+
+    st.markdown("##### 95% interindividual-variability bands")
+    st.caption("Between-patient spread under the published variability. Not "
+               "uncertainty in the published parameter estimates, and not a "
+               "predictive interval for an individual (EB-2).")
+    cri_map = {}
+    for col, model in zip(st.columns(len(CRI_MODELS) + 1), CRI_MODELS):
+        with col:
+            cri_map[model] = st.checkbox(f"{display_name(model)} band", value=False,
+                                         disabled=not visibility_map[model],
+                                         key=f"cri_{model}")
+
     st.divider()
 
     # Create layout
@@ -586,142 +608,92 @@ with tab_compare:
     with col_comp_plot:
         fig, ax = plt.subplots(figsize=(10, 6))
         t_plot = np.linspace(0, 120, 121)
-    
-        # --- Lanoiselee ---
-        if show_lan:
-            if show_lan_cri:
-                t_lan, lo_lan, med_lan, hi_lan = get_lanoiselee_cri(c_bolus_total, [(c_t_to, c_prime)])
-                ax.fill_between(t_lan, lo_lan, hi_lan, color='tab:blue', alpha=0.15)
-            
-            y_lan = [get_reference_remaining("Lanoiselee", t, c_bolus_total, c_prime, c_ibw, c_t_to, c_t_on) for t in t_plot]
-            ax.plot(t_plot, y_lan, color='tab:blue', lw=2, label='Lanoiselee')
-    
-        # --- Delavenne ---
-        if show_del:
-            if show_del_cri:
-                t_del, lo_del, med_del, hi_del = get_delavenne_cri(c_bolus_total, [(c_t_to, c_prime)], c_ibw)
-                ax.fill_between(t_del, lo_del, hi_del, color='purple', alpha=0.15)
-            
-            y_del = [get_reference_remaining("Delavenne", t, c_bolus_total, c_prime, c_ibw, c_t_to, c_t_on) for t in t_plot]
-            ax.plot(t_plot, y_del, color='purple', lw=2, label='Delavenne')
-    
-        # --- Jia ---
-        if show_jia:
-            if show_jia_cri:
-                t_jia, lo_jia, med_jia, hi_jia = get_jia_cri(c_bolus_total, [(c_t_to, c_prime)], c_ibw)
-                ax.fill_between(t_jia, lo_jia, hi_jia, color='green', alpha=0.15)
-            
-            y_jia = [get_reference_remaining("Jia", t, c_bolus_total, c_prime, c_ibw, c_t_to, c_t_on) for t in t_plot]
-            ax.plot(t_plot, y_jia, color='green', lw=2, label='Jia')
-    
-        # --- Meesters ---
-        if show_mee:
-            y_mee = [get_reference_remaining("Meesters", t, c_bolus_total, c_prime, c_ibw, c_t_to, c_t_on) for t in t_plot]
-            ax.plot(t_plot, y_mee, color='tab:red', lw=2, linestyle='--', label='Meesters')
-    
-        # --- PRODOSE ---
-        if show_pro:
-            y_pro = [get_reference_remaining("PRODOSE", t, c_bolus_total, c_prime, c_ibw, c_t_to, c_t_on) for t in t_plot]
-            ax.plot(t_plot, y_pro, color='tab:orange', lw=2, linestyle='--', label='PRODOSE')
-            
-        # --- PRODOSE-2 ---
-        if show_pro2:
-            y_pro = [get_reference_remaining("PRODOSE-2", t, c_bolus_total, c_prime, c_ibw, c_t_to, c_t_on) for t in t_plot]
-            ax.plot(t_plot, y_pro, color='black', lw=2, linestyle='--', label='PRODOSE-2')
-    
-        # Plot Visuals
+
+        for model in comp_models:
+            if not visibility_map[model]:
+                continue
+            colour = SERIES_COLOUR[model]
+            if cri_map.get(model):
+                if model == "lanoiselee":
+                    t_c, lo_c, _, hi_c = get_lanoiselee_cri(c_bolus_total, [(c_t_to, c_prime)])
+                elif model == "delavenne":
+                    t_c, lo_c, _, hi_c = get_delavenne_cri(c_bolus_total, [(c_t_to, c_prime)], c_ibw)
+                else:
+                    t_c, lo_c, _, hi_c = get_jia_cri(c_bolus_total, [(c_t_to, c_prime)], c_ibw)
+                ax.fill_between(t_c, lo_c, hi_c, color=colour, alpha=0.15, lw=0)
+
+            y = [get_reference_remaining(model, t, c_bolus_total, c_prime, c_ibw, c_t_to)
+                 for t in t_plot]
+            ax.plot(t_plot, y, color=colour, lw=2, label=display_name(model))
+
         ax.axvline(x=c_end_time, color='black', linestyle=':', label="End of CPB")
         ax.set_xlabel("Time (min)")
         ax.set_ylabel("Heparin Amount (IU)")
         ax.legend(loc='upper right', fontsize='small', ncol=2)
         ax.grid(True, alpha=0.3)
-        
         st.pyplot(fig)
-    
-with col_comp_data:
-        st.subheader("Remaining Heparin")
-        st.caption(f"Calculated at End of CPB ({c_end_time:.0f} min)")
-        
-        results = []
-        
-        # Color Map
-        color_map = {
-            "Lanoiselee": "#1f77b4",
-            "Delavenne": "purple",
-            "Jia": "green",
-            "Meesters": "#d62728",
-            "PRODOSE": "#ff7f0e",
-            "PRODOSE-2": "black"
-        }
 
-        # Visibility Map
-        visibility_map = {
-            "Lanoiselee": show_lan,
-            "Delavenne": show_del,
-            "Jia": show_jia,
-            "Meesters": show_mee,
-            "PRODOSE": show_pro,
-            "PRODOSE-2": show_pro2
-        }
-        
+    with col_comp_data:
+        st.subheader("Remaining heparin")
+        st.caption(f"At end of CPB ({c_end_time:.0f} min)")
+
+        results = []
         for model in comp_models:
-            if visibility_map[model]:
-                rem_dose = get_reference_remaining(model, c_end_time, c_bolus_total, c_prime, c_ibw, c_t_to, c_t_on)
-                
-                cri_text = None
+            if not visibility_map[model]:
+                continue
+            rem = get_reference_remaining(model, c_end_time, c_bolus_total,
+                                          c_prime, c_ibw, c_t_to)
+            band = None
+            if model in CRI_MODELS:
                 try:
-                    # We need the time array (t_mc) to find the correct index
-                    if model == "Lanoiselee":
-                        t_mc, lo, _, hi = get_lanoiselee_cri(c_bolus_total, [(c_t_to, c_prime)])
-                    elif model == "Delavenne":
-                        t_mc, lo, _, hi = get_delavenne_cri(c_bolus_total, [(c_t_to, c_prime)], c_ibw)
-                    elif model == "Jia":
-                        t_mc, lo, _, hi = get_jia_cri(c_bolus_total, [(c_t_to, c_prime)], c_ibw)
+                    if model == "lanoiselee":
+                        t_c, lo, _, hi = get_lanoiselee_cri(c_bolus_total, [(c_t_to, c_prime)])
+                    elif model == "delavenne":
+                        t_c, lo, _, hi = get_delavenne_cri(c_bolus_total, [(c_t_to, c_prime)], c_ibw)
                     else:
-                        t_mc = None
-        
-                    if t_mc is not None:
-                        # --- FIX: Find the index where t_mc is closest to c_end_time ---
-                        idx = np.abs(t_mc - c_end_time).argmin()
-                        cri_text = f"{lo[idx]:,.0f} to {hi[idx]:,.0f}"
-                        
+                        t_c, lo, _, hi = get_jia_cri(c_bolus_total, [(c_t_to, c_prime)], c_ibw)
+                    i = np.abs(t_c - c_end_time).argmin()
+                    band = f"{lo[i]:,.0f} to {hi[i]:,.0f}"
                 except Exception:
-                    cri_text = "N/A"
-        
-                results.append((model, rem_dose, color_map[model], cri_text))
-        
-        # Sort by remaining dose
-        results.sort(key=lambda x: x[1], reverse=True)
-        
-        # Display
+                    band = None
+            results.append((model, rem, SERIES_COLOUR[model], band))
+
+        results.sort(key=lambda r: r[1], reverse=True)
+
         if not results:
             st.info("No models selected.")
-        else:
-            for model_name, dose, color, cri in results:
-                # Build the CrI HTML string if data exists
-                cri_html = f'<p style="margin:0; font-size: 0.8em; color: #888;">95% CrI: {cri} IU</p>' if cri else ""
-                
-                st.markdown(
-                    f"""
-                    <div style="
-                        border-left: 5px solid {color}; 
-                        padding-left: 10px; 
-                        margin-bottom: 10px; 
-                        background-color: rgba(255,255,255,0.05); 
-                        border-radius: 0 5px 5px 0;">
-                        <p style="margin:0; font-size: 0.9em; color: gray;">{model_name}</p>
-                        <p style="margin:0; font-size: 1.2em; font-weight: bold;">{dose:,.0f} IU</p>
-                        {cri_html}
-                    </div>
-                    """, 
-                    unsafe_allow_html=True
-                )
-                
+        for model, dose, colour, band in results:
+            band_html = (f'<p style="margin:0; font-size:0.78em; color:#888;">'
+                         f'95% interindividual range: {band} IU</p>' if band else "")
+            st.markdown(
+                f"""
+                <div style="border-left: 5px solid {colour};
+                            padding-left: 10px; margin-bottom: 10px;
+                            background-color: rgba(255,255,255,0.05);
+                            border-radius: 0 5px 5px 0;">
+                    <p style="margin:0; font-size:0.9em; color:gray;">{display_name(model)}</p>
+                    <p style="margin:0; font-size:1.2em; font-weight:bold;">{dose:,.0f} IU</p>
+                    {band_html}
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        spread = [r[1] for r in results]
+        if len(spread) > 1:
+            st.caption(
+                f"Between-model spread at this timepoint: {min(spread):,.0f} to "
+                f"{max(spread):,.0f} IU ({100 * (max(spread) - min(spread)) / max(spread):.0f}% "
+                "of the highest). The reference models disagree with each other by "
+                "more than the nomogram disagrees with any one of them, which is "
+                "why model selection is an institutional decision."
+            )
+
 with tab_clinical:
     pat_total_time = pat_t_to + pat_t_on
 
     if k_table is None:
-        st.warning(f"Lookup table for {model_choice} not found. Please click 'Regenerate Lookup Tables' in sidebar.")
+        st.warning(f"Lookup table for {display_name(model_choice)} not found. Please click 'Regenerate Lookup Tables' in sidebar.")
     
     d0_baseline = (h_base * ibw_base) + p_base
     
@@ -737,7 +709,7 @@ with tab_clinical:
 
     col1, col2 = st.columns([1, 1])
     with col1:
-        st.subheader(f"Heparin Decay ({model_choice} Benchmark)")
+        st.subheader(f"Heparin Decay ({display_name(model_choice)} Benchmark)")
         t_plot = np.linspace(0, 120, 200)
         pat_d0 = (pat_h_kg * pat_ibw) + pat_p_hep
         
@@ -752,12 +724,12 @@ with tab_clinical:
         fig1, ax1 = plt.subplots(figsize=(6, 5))
         ax1.fill_between(t_plot, y_simp_lo, y_simp_hi, color='tab:blue', alpha=0.15, label='95% CrI (Simplified Model)')
         ax1.plot(t_plot, y_simp_mu, color='tab:blue', lw=1.5, label=f'Simplified (k={k_mu:.4f})')
-        ax1.plot(t_plot, y_ref_pat, color='tab:orange', ls='--', lw=2.0, label=f'Reference ({model_choice})')
+        ax1.plot(t_plot, y_ref_pat, color='tab:orange', ls='--', lw=2.0, label=f'Reference ({display_name(model_choice)})')
         
         # --- NEW: Initialize CrI storage for Results column ---
         ref_cri = None
 
-        if model_choice == "Lanoiselee":
+        if model_choice == "lanoiselee":
             reversal_threshold = 0.625 * pat_d0
             ax1.axhline(y=reversal_threshold, color='green', ls=':', lw=1.5, label="0.625:1 ratio")
 
@@ -767,7 +739,7 @@ with tab_clinical:
             idx = np.abs(t_mc - pat_total_time).argmin()
             ref_cri = f"{lo[idx]:,.0f} to {hi[idx]:,.0f}" # Capture value at end
             
-        elif model_choice == "Delavenne":
+        elif model_choice == "delavenne":
             init_bolus = pat_ibw * pat_h_kg
             t_mc, lo, med, hi = get_delavenne_cri(init_bolus, [(pat_t_to, pat_p_hep)], pat_ibw)
             ax1.fill_between(t_mc, lo, hi, color='purple', alpha=0.1, label='Delavenne 95% CrI')
@@ -775,7 +747,7 @@ with tab_clinical:
             ref_cri = f"{lo[idx]:,.0f} to {hi[idx]:,.0f}" # Capture value at end
             
             
-        elif model_choice == "Jia":
+        elif model_choice == "jia":
             init_bolus = pat_ibw * pat_h_kg
             t_mc, lo, med, hi = get_jia_cri(init_bolus, [(pat_t_to, pat_p_hep)], pat_ibw)
             ax1.fill_between(t_mc, lo, hi, color='green', alpha=0.1, label='Jia 95% CrI')
@@ -819,7 +791,7 @@ with tab_clinical:
         st.caption(f"95% CrI: {res_simp_lo:,.0f} to {res_simp_hi:,.0f} IU")
         
         # Display Reference Metric
-        st.metric(f"{model_choice} Prediction", f"{res_ref:,.0f} IU")
+        st.metric(f"{display_name(model_choice)} Prediction", f"{res_ref:,.0f} IU")
         if ref_cri:
             st.caption(f"95% CrI: {ref_cri} IU")
         
@@ -829,7 +801,7 @@ with tab_clinical:
         
         st.markdown(f"""
         **Parameters Used:**
-        * Model: {model_choice}
+        * Model: {display_name(model_choice)}
         * Calibrated Decay ($k$): {k_mu:.5f}
         * Patient Total Load: {pat_d0:,.0f} IU
         """)
@@ -906,7 +878,7 @@ with tab_topup:
     ax.plot(t_phase2, simp_phase2, 'b--', linewidth=2, label="Simplified (Axis Reset)")
     
     # Reference Model Curves
-    ax.plot(t_phase1, ref_phase1, 'r-', linewidth=2, alpha=0.7, label=f"Reference: {model_choice}")
+    ax.plot(t_phase1, ref_phase1, 'r-', linewidth=2, alpha=0.7, label=f"Reference: {display_name(model_choice)}")
     ax.plot(t_phase2, ref_phase2, 'r--', linewidth=2, alpha=0.7, label="Reference (Analytical Superposition)")
     
     # Annotations
@@ -934,9 +906,9 @@ with tab_topup:
     final_pct = pct_arr[-1]
 
     st.info(
-        f"**Concordance check** (difference = {model_choice} minus nomogram). "
+        f"**Concordance check** (difference = {display_name(model_choice)} minus nomogram). "
         f"At the end of the plotted window the axis-reset estimate differs from "
-        f"the {model_choice} model by **{final_pct:+.1f}%** "
+        f"the {display_name(model_choice)} model by **{final_pct:+.1f}%** "
         f"({diff_arr[-1]:+,.0f} IU). Across the whole post-top-up window the mean "
         f"absolute divergence is **{np.nanmean(np.abs(pct_arr)):.1f}%** and the "
         f"worst case is **{pct_arr[worst_i]:+.1f}%** "
@@ -958,111 +930,45 @@ with tab_nomogram:
         r_min, r_max = res_baseline * 0.6, res_baseline * 1.4
         m_modulus = 10 / (np.log(d0_max) - np.log(d0_min))
 
-        def draw_nomo():
-            fig2, ax2 = plt.subplots(figsize=(7, 8), dpi=100)
-            xl, xm, xr = 0, 1, 2
-                
-            def draw_axis(x, v_min, v_max, rev, side):
-                ax2.vlines(x, 0, 10, color='black', lw=1.0)
-                for v in np.arange((int(v_min//1000)+1)*1000, v_max, 1000):
-                    y = m_modulus * (np.log(v) - np.log(v_min))
-                    if rev: y = 10 - y
-                    if 0 <= y <= 10:
-                        is_maj = (v % 5000 == 0)
-                        ax2.hlines(y, x-0.02, x+0.02, lw=0.8 if is_maj else 0.4)
-                        if is_maj: ax2.text(x+(0.08 if side=='r' else -0.08), y, f"{v:,.0f}", ha=('left' if side=='r' else 'right'), va='center', fontsize=8)
-    
-            draw_axis(xl, d0_min, d0_max, False, 'l') 
-            draw_axis(xr, r_min, r_max, True, 'r')
-    
-            # --- Middle Time Axis ---
-            y_l_ref = m_modulus * (np.log(d0_baseline) - np.log(d0_min))
-            y_r_0 = 10 - (m_modulus * (np.log(d0_baseline * np.exp(-k_mu * 0)) - np.log(r_min)))
-            y_r_120 = 10 - (m_modulus * (np.log(d0_baseline * np.exp(-k_mu * 120)) - np.log(r_min)))
-            ax2.vlines(xm, (y_l_ref + y_r_120)/2, (y_l_ref + y_r_0)/2, color='black', lw=0.8)
-              
-            for t_mark in range(0, 121, 5):
-                y_r_ref = 10 - (m_modulus * (np.log(d0_baseline * np.exp(-k_mu * t_mark)) - np.log(r_min)))
-                y_m = (y_l_ref + y_r_ref) / 2
-                if 0 <= y_m <= 10:
-                    is_maj = (t_mark % 15 == 0)
-                    ax2.hlines(y_m, xm-(0.04 if is_maj else 0.02), xm+(0.04 if is_maj else 0.02), lw=0.7 if is_maj else 0.4)
-                    if is_maj: ax2.text(xm + 0.07, y_m, f"{t_mark}m", fontsize=7, va='center')
-    
-            # Patient straightedge
-            y_l_pat = m_modulus * (np.log(pat_d0) - np.log(d0_min))
-            pat_time = pat_t_to + pat_t_on
-            y_r_mu_p = 10 - (m_modulus * (np.log(pat_d0 * np.exp(-k_mu * pat_time)) - np.log(r_min)))
-                
-            # --- 1. Simplified Model Uncertainty Fan ---
-            y_r_hi_p = 10 - (m_modulus * (np.log(pat_d0 * np.exp(-k_lo * pat_time)) - np.log(r_min)))
-            y_r_lo_p = 10 - (m_modulus * (np.log(pat_d0 * np.exp(-k_hi * pat_time)) - np.log(r_min)))
-            # This fan spans the k values obtained at time-on-CPB -/+ 2 SD. It is
-            # a scenario range, not a credible interval, and it is a feature of
-            # this interactive tool only -- the printed nomogram carries no band
-            # (EB-2, EB-8).
-            ax2.fill([xl, xr, xr], [y_l_pat, y_r_lo_p, y_r_hi_p], color='tab:red',
-                     alpha=0.1, label="Nomogram scenario range")
-            ax2.plot([xl, xr], [y_l_pat, y_r_mu_p], color='red', lw=1.2, zorder=5)
-            
-            # --- 2. Reference Model Uncertainty (Shaded Area on Axis) ---
-            # Re-calculating the raw numeric values for current patient
-            ref_lo, ref_hi = None, None
-            init_bolus = pat_ibw * pat_h_kg
-            try:
-                if model_choice == "Lanoiselee":
-                    _, lo, _, hi = get_lanoiselee_cri(init_bolus, [(pat_t_to, pat_p_hep)])
-                    idx = np.abs(t_mc - pat_total_time).argmin()
-                    ref_lo, ref_hi = lo[idx], hi[idx]
-                elif model_choice == "Delavenne":
-                    _, lo, _, hi = get_delavenne_cri(init_bolus, [(pat_t_to, pat_p_hep)], pat_ibw)
-                    idx = np.abs(t_mc - pat_total_time).argmin()
-                    ref_lo, ref_hi = lo[idx], hi[idx]
-                elif model_choice == "Jia":
-                    _, lo, _, hi = get_jia_cri(init_bolus, [(pat_t_to, pat_p_hep)], pat_ibw)
-                    ref_lo, ref_hi = lo[-1], hi[-1]
-            except:
-                pass
+        # Drawn by the same module that renders the printed PDF, from the same
+        # decay constant, so the screen and the print cannot disagree. The
+        # previous version was a second, independent implementation fed by a
+        # different k -- the defect EB-3 was about, surviving in the drawing layer.
+        geom = nomogram_geometry_for(k_mu, h_base, p_base, ibw_base)
 
-# --- 2. Reference Model Uncertainty (Shaded Area on Axis) ---
-            # (Calculation of ref_lo, ref_hi and idx remains as before)
-            
-            if ref_lo is not None:
-                # Calculate raw Y coordinates
-                y_raw_lo = 10 - (m_modulus * (np.log(ref_lo) - np.log(r_min)))
-                y_raw_hi = 10 - (m_modulus * (np.log(ref_hi) - np.log(r_min)))
-                
-                # Clip the coordinates for the shaded fill area
-                y_fill_lo = np.clip(y_raw_lo, 0, 10)
-                y_fill_hi = np.clip(y_raw_hi, 0, 10)
-                
-                # Draw the shaded bar (clipped to axis limits)
-                ax2.fill_betweenx([y_fill_hi, y_fill_lo], xr+0.05, xr+0.18, 
-                                 color='orange', alpha=0.3, label=f'{model_choice} CrI')
-                
-                # Add arrows if the CrI goes beyond the scale
-                # Note: On this axis, y=10 is the bottom (lower dose) and y=0 is the top (higher dose)
-                arrow_props = dict(arrowstyle='->', color='orange', lw=1.5)
-                
-                # If HI bound (higher dose) is above the top of axis (y < 0)
-                if y_raw_hi < 0:
-                    ax2.annotate('', xy=(xr+0.115, 0), xytext=(xr+0.115, 0.5), arrowprops=arrow_props)
-                
-                # If LO bound (lower dose) is below the bottom of axis (y > 10)
-                if y_raw_lo > 10:
-                    ax2.annotate('', xy=(xr+0.115, 10), xytext=(xr+0.115, 9.5), arrowprops=arrow_props)
+        ref_lo = ref_hi = None
+        try:
+            if model_choice in CRI_MODELS_ALL:
+                init_bolus = pat_ibw * pat_h_kg
+                if model_choice == "lanoiselee":
+                    t_mc, lo, _, hi = get_lanoiselee_cri(init_bolus, [(pat_t_to, pat_p_hep)])
+                elif model_choice == "delavenne":
+                    t_mc, lo, _, hi = get_delavenne_cri(init_bolus, [(pat_t_to, pat_p_hep)], pat_ibw)
+                else:
+                    t_mc, lo, _, hi = get_jia_cri(init_bolus, [(pat_t_to, pat_p_hep)], pat_ibw)
+                idx = np.abs(t_mc - (pat_t_to + pat_t_on)).argmin()
+                ref_lo, ref_hi = float(lo[idx]), float(hi[idx])
+        except Exception:
+            ref_lo = ref_hi = None
 
-                # Centered label
-                y_text = (y_fill_lo + y_fill_hi) / 2
-                ax2.text(xr+0.22, y_text, f"Ref CrI\n({model_choice})", 
-                         fontsize=7, color='orange', fontweight='bold', va='center')
-                         
-            ax2.text(xl, 10.4, "Initial Dose", ha='center', fontsize=9, fontweight='bold')
-            ax2.text(xr, 10.4, "Residual", ha='center', fontsize=9, fontweight='bold')
-            ax2.axis('off')
-            return fig2
-            
-        st.pyplot(draw_nomo())
+        fig_nomo, ax_nomo = plt.subplots(figsize=(6.2, 7.6))
+        draw_nomogram(
+            geom, ax=ax_nomo,
+            patient={"total": pat_d0, "elapsed": pat_t_to + pat_t_on},
+            residual_band=(ref_lo, ref_hi) if ref_lo is not None else None,
+            title=f"{display_name(model_choice)}  ·  k = {k_mu:.5f} /min",
+        )
+        st.pyplot(fig_nomo)
+        if ref_lo is not None:
+            st.caption(
+                f"The shaded bar spans the {display_name(model_choice)} model's "
+                f"95% interindividual-variability range at this patient's reversal "
+                f"time ({ref_lo:,.0f} to {ref_hi:,.0f} IU). It describes spread "
+                "between patients, not uncertainty in the published parameters, "
+                "and it is a feature of this interactive tool only: the printed "
+                "nomogram's time axis is spaced for one decay constant, so a "
+                "different constant is a different chart rather than a wider line."
+            )
         
     with col2:
         st.markdown("""
@@ -1080,7 +986,7 @@ with tab_nomogram:
 with tab_diagnostics:
     # 'Ground truth' removed throughout: the published models are reference
     # models used as the approximation target, not ground truth (EB-1, R1 p11 L51).
-    st.info(f"Diagnostics will run using **{model_choice}** as the reference model "
+    st.info(f"Diagnostics will run using **{display_name(model_choice)}** as the reference model "
             "(the approximation target, not ground truth). The comparison cohort is "
             "an internal resample from the same assumed distributions, not an "
             "external validation cohort.")
@@ -1091,7 +997,7 @@ with tab_diagnostics:
              "The seed is printed in the PDF footer and recorded with the results "
              "(EB-6).")
     if st.button("Run Full Diagnostics & Generate PDF"):
-        with st.spinner(f"Simulating against {model_choice}..."):
+        with st.spinner(f"Simulating against {display_name(model_choice)}..."):
             res = run_nomogram(h_base, t_to_base, p_base, ibw_base, ibw_sd,
                                t_to_sd, t_on_base, t_on_sd,
                                model_choice, seed=diag_seed)
@@ -1104,7 +1010,7 @@ with tab_diagnostics:
 
             with sub[0]: # Nomogram
                 with open(pdf_path, "rb") as f:
-                    st.download_button("Download Nomogram PDF", f, file_name=f"nomogram_{model_choice}.pdf")
+                    st.download_button("Download Nomogram PDF", f, file_name=f"nomogram_{display_name(model_choice)}.pdf")
                 
                 col1, col2 = st.columns(2)
                 
@@ -1219,9 +1125,42 @@ with tab_diagnostics:
                     st.caption(
                         "Previously labelled a bootstrap and a posterior: neither is "
                         "accurate. No dataset is resampled and no prior is specified; "
-                        "a fresh synthetic cohort is simulated for each replicate. "
-                        "For uncertainty in the published parameters, see "
-                        "parameter_uncertainty() in calibration.py."
+                        "a fresh synthetic cohort is simulated for each replicate."
+                    )
+
+                st.subheader("Uncertainty in the published parameters (EB-2)")
+                if model_choice in CRI_MODELS_ALL:
+                    with st.spinner("Propagating published parameter uncertainty..."):
+                        pu = parameter_uncertainty(
+                            _spec(h_base, p_base, ibw_base, ibw_sd, t_to_base,
+                                  t_to_sd, t_on_base, t_on_sd),
+                            model_choice, seed=diag_seed, n_draws=120, n_sim=400)
+                    if pu.available:
+                        pk = summarise_k(pu.draws["k"])
+                        mc_w, pu_w = ci_high - ci_low, pk["k_p97_5"] - pk["k_p2_5"]
+                        c1, c2, c3 = st.columns(3)
+                        c1.metric("Sampling precision",
+                                  f"{mc_w:.5f}", help=f"{ci_low:.5f} to {ci_high:.5f}")
+                        c2.metric("Parameter uncertainty", f"{pu_w:.5f}",
+                                  help=f"{pk['k_p2_5']:.5f} to {pk['k_p97_5']:.5f}")
+                        c3.metric("Ratio", f"{pu_w / mc_w:.0f}x wider")
+                        st.info(
+                            f"Propagating the uncertainty **{display_name(model_choice)} "
+                            f"actually reports** ({pu.reason}) gives an interval "
+                            f"**{pu_w / mc_w:.0f} times wider** than the sampling "
+                            f"interval above. Only this second interval speaks to how "
+                            f"well the reference model itself is known."
+                        )
+                        st.dataframe(
+                            pd.DataFrame([{"parameter": k_, "uncertainty from": v}
+                                          for k_, v in (pu.provenance or {}).items()]),
+                            use_container_width=True, hide_index=True)
+                else:
+                    st.caption(
+                        f"{display_name(model_choice)} is published as a closed-form "
+                        "expression without an estimation-uncertainty table, so no "
+                        "parameter-uncertainty interval can be propagated for it. "
+                        "Reported as such rather than substituted."
                     )
 
             with sub[4]: # Sensitivity

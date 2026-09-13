@@ -38,6 +38,7 @@ import agreement as A
 import benchmarks as B
 import calibration as cal
 import nomogram_core as core
+import nomogram_render as nr
 import parameter_spaces as ps
 import topup as T
 
@@ -86,7 +87,7 @@ def _package_versions() -> dict:
         "scipy": scipy.__version__,
         "pandas": pd.__version__,
     }
-    for name in ("matplotlib", "streamlit", "pynomo"):
+    for name in ("matplotlib", "streamlit"):
         try:
             versions[name] = __import__(name).__version__
         except Exception:
@@ -440,6 +441,7 @@ def run(args) -> Path:
         "generated_utc": datetime.now(timezone.utc).isoformat(),
         "analysis_version": ANALYSIS_VERSION,
         "core_version": core.CORE_VERSION,
+        "render_version": nr.RENDER_VERSION,
         "calibration_version": cal.CALIBRATION_VERSION,
         "seed": seed,
         "seed_streams": STREAM,

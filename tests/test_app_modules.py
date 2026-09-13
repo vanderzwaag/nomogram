@@ -40,14 +40,8 @@ def nomogram_models():
                empty=lambda: types.SimpleNamespace(text=lambda *a: None),
                success=lambda *a, **k: None,
                error=lambda *a, **k: None)
-    _stub("pynomo")
-    _stub("pynomo.nomographer", Nomographer=lambda params: None)
-    _stub("PyPDF2", PdfReader=object, PdfWriter=object)
-    _stub("reportlab")
-    _stub("reportlab.pdfgen", canvas=types.SimpleNamespace(Canvas=object))
-    _stub("reportlab.lib")
-    _stub("reportlab.lib.pagesizes", A4=(595.0, 842.0))
-    _stub("reportlab.lib.units", cm=28.35)
+    # PyNomo, PyX, LaTeX, Ghostscript, ReportLab and PyPDF2 are gone: the
+    # nomogram is plain matplotlib now, so nothing here needs stubbing for it.
 
     import matplotlib
     matplotlib.use("Agg")
@@ -138,12 +132,7 @@ def test_run_nomogram_end_to_end(nomogram_models, tmp_path, monkeypatch):
     revision fixes: one k used everywhere, and a declared seed."""
     monkeypatch.chdir(tmp_path)
 
-    # The PDF stage needs PyNomo and ReportLab, which are stubbed; skip it.
-    monkeypatch.setattr(nomogram_models, "build_nomogram", lambda k: "stub.pdf")
-    monkeypatch.setattr(nomogram_models, "center_pdf_on_a4", lambda a, b: None)
-    monkeypatch.setattr(nomogram_models, "add_footer_to_pdf",
-                        lambda a, b, text: tmp_path.joinpath("footer.txt").write_text(text))
-
+    # The PDF stage runs for real now.
     res = nomogram_models.run_nomogram(
         400, 15, 5000, 70, 10, 3.75, 60, 15, "lanoiselee",
         seed=777, n_sim=300, n_replicates=20)
@@ -156,8 +145,10 @@ def test_run_nomogram_end_to_end(nomogram_models, tmp_path, monkeypatch):
     assert ci_low <= k_best <= ci_high, (
         "the reported k must lie inside its own sampling interval"
     )
-    assert f"{k_best:.5f}" in tmp_path.joinpath("footer.txt").read_text()
-    assert "seed 777" in tmp_path.joinpath("footer.txt").read_text()
+    # The printed nomogram is produced, and it is a real PDF.
+    pdf = tmp_path / pdf_path
+    assert pdf.exists() and pdf.read_bytes().startswith(b"%PDF")
+    assert pdf.stat().st_size > 5000
 
     # The agreement statistics carry the new quantities and the sign convention.
     assert metadata["sign_convention"] == "reference_minus_nomogram"
@@ -180,9 +171,6 @@ def test_run_nomogram_end_to_end(nomogram_models, tmp_path, monkeypatch):
 
 def test_run_nomogram_is_reproducible(nomogram_models, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(nomogram_models, "build_nomogram", lambda k: "stub.pdf")
-    monkeypatch.setattr(nomogram_models, "center_pdf_on_a4", lambda a, b: None)
-    monkeypatch.setattr(nomogram_models, "add_footer_to_pdf", lambda a, b, t: None)
 
     def k_of(seed):
         return nomogram_models.run_nomogram(
