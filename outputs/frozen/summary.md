@@ -1,7 +1,7 @@
 # Frozen analysis run
 
-- Generated: 2026-09-12T19:40:49.187159+00:00
-- Commit: `4833fb5`
+- Generated: 2026-09-13T09:44:44.854860+00:00
+- Commit: `36ad3dc-dirty`  **working tree dirty -- commit before quoting these numbers**
 - Seed: `20260912`
 - Cohort: grid_snapped_70_15_60: 400 IU/kg, prime 5000 IU, IBW 70+/-10 kg, time to CPB 15+/-3.75 min, time on CPB 60+/-15 min [adult]
 - Sign convention: Difference = reference model - nomogram (positive = nomogram under-estimates)
@@ -16,7 +16,7 @@
 |---|---|---|---|---|
 | Delavenne | adult | 0.01046 | 0.01035 to 0.01057 | 66 |
 | Jia | adult | 0.00715 | 0.00715 to 0.00716 | 97 |
-| Lanoiselee | adult | 0.00703 | 0.00703 to 0.00703 | 99 |
+| Lanoiselée | adult | 0.00703 | 0.00703 to 0.00703 | 99 |
 | Meesters | adult | 0.00386 | 0.00384 to 0.00387 | 180 |
 | PRODOSE | adult | 0.00550 | 0.00548 to 0.00551 | 126 |
 | PRODOSE-2 | adult | 0.00419 | 0.00418 to 0.00421 | 165 |
@@ -29,7 +29,7 @@ The interval is a Monte Carlo sampling-precision interval. It does **not** quant
 |---|---|---|---|---|---|---|---|
 | Delavenne | -12.84 | -3714.2 to +3688.6 | 10.33 | 48.1 | -0.1093 | 2e-07 | 40.3 |
 | Jia | +3.99 | -200.6 to +208.5 | 0.44 | 2.1 | +0.0008 | 0.43 | 100.0 |
-| Lanoiselee | +4.80 | -176.4 to +186.0 | 0.38 | 2.0 | -0.0085 | 3e-21 | 100.0 |
+| Lanoiselée | +4.80 | -176.4 to +186.0 | 0.38 | 2.0 | -0.0085 | 3e-21 | 100.0 |
 | Meesters | +9.99 | -806.1 to +826.1 | 1.35 | 4.7 | -0.0706 | 5e-77 | 98.2 |
 | PRODOSE | +9.59 | -696.6 to +715.8 | 1.32 | 4.8 | -0.0813 | 2.8e-147 | 99.3 |
 | PRODOSE-2 | +15.79 | -953.0 to +984.6 | 1.65 | 7.2 | -0.1320 | 2.1e-246 | 96.1 |
@@ -112,7 +112,7 @@ The sampling-precision interval repeats the simulation with fresh cohorts drawn 
 |---|---|---|---|---|---|
 | Delavenne | 0.01046 | 0.01035 to 0.01057 | 0.00923 to 0.01165 | 11x wider | published %RSE |
 | Jia | 0.00715 | 0.00715 to 0.00716 | 0.00549 to 0.00883 | 345x wider | published bootstrap 95% CI |
-| Lanoiselee | 0.00703 | 0.00703 to 0.00703 | 0.00626 to 0.00777 | 183x wider | published %RSE |
+| Lanoiselée | 0.00703 | 0.00703 to 0.00703 | 0.00626 to 0.00777 | 183x wider | published %RSE |
 | Meesters | 0.00386 | 0.00384 to 0.00387 | not propagated | -- | closed-form expression; none published |
 | PRODOSE | 0.00550 | 0.00548 to 0.00551 | not propagated | -- | closed-form expression; none published |
 | PRODOSE-2 | 0.00419 | 0.00418 to 0.00421 | not propagated | -- | closed-form expression; none published |

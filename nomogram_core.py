@@ -39,7 +39,7 @@ MODEL_NAMES = ("delavenne", "jia", "lanoiselee", "meesters", "prodose", "prodose
 DISPLAY_NAMES = {
     "delavenne": "Delavenne",
     "jia": "Jia",
-    "lanoiselee": "Lanoiselee",
+    "lanoiselee": "Lanoiselée",
     "meesters": "Meesters",
     "prodose": "PRODOSE",
     "prodose-2": "PRODOSE-2",
@@ -314,8 +314,17 @@ PD_PARAMETERS = {
 
 
 def canonical_model_name(model_name: str) -> str:
-    """Map any accepted spelling of a model onto its canonical key."""
-    key = model_name.strip().lower()
+    """Map any accepted spelling of a model onto its canonical key.
+
+    Accents are stripped, so both "Lanoiselee" and the correct "Lanoiselée"
+    resolve to the ASCII key the lookup tables and filenames use. R1 asked for
+    the acute accent to be used throughout; the display name carries it while
+    the key stays ASCII, so no file path or pickle key changes.
+    """
+    import unicodedata
+
+    key = unicodedata.normalize("NFKD", model_name.strip().lower())
+    key = "".join(c for c in key if not unicodedata.combining(c))
     if key not in MODEL_PARAMETERS:
         raise ValueError(f"Unknown model: {model_name!r}. Known models: {MODEL_NAMES}")
     return key
