@@ -1,7 +1,7 @@
 # Frozen analysis run
 
-- Generated: 2026-09-13T12:46:51.234129+00:00
-- Commit: `9820949-dirty`  **working tree dirty -- commit before quoting these numbers**
+- Generated: 2026-09-13T13:24:10.338698+00:00
+- Commit: `a5f3d7a`
 - Seed: `20260912`
 - Cohort: grid_snapped_70_15_60: 400 IU/kg, prime 5000 IU, IBW 70+/-10 kg, time to CPB 15+/-3.75 min, time on CPB 60+/-15 min [adult]
 - Sign convention: Difference = reference model - nomogram (positive = nomogram under-estimates)
