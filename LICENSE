@@ -1,0 +1,47 @@
+MIT License
+
+Copyright (c) 2026 Stanislaw Vander Zwaag
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+--------------------------------------------------------------------------
+
+STATEMENT OF INTENDED PURPOSE
+
+The following is a statement of the purpose for which this software was
+built. It is not a licence term, adds no condition or restriction to the MIT
+licence above, and does not modify it.
+
+This software is a research and educational instrument. Its intended purpose
+is to demonstrate and teach an informatics method: calibrating a simplified
+single-compartment approximation against published pharmacokinetic models of
+unfractionated heparin, under simulated conditions. It is not intended for
+clinical use, for the care or management of any patient, or to determine,
+inform or influence any drug dose.
+
+Within that intended purpose the software is not a medical device.
+
+Nothing in this software has been cleared, approved or evaluated by any
+regulatory authority. Its outputs have not been validated against measured
+anti-factor Xa activity, activated clotting time or clinical reversal in
+patients, and no clinical benefit has been demonstrated. Anyone using it
+outside the intended purpose stated above does so on their own responsibility
+and may bring the tool within medical-device oversight in their jurisdiction;
+the authors accept no responsibility for such use and make no assessment of
+how any jurisdiction would classify it.

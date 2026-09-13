@@ -37,11 +37,13 @@ from parameter_spaces import ADULT_GRID, describe_grids
 # LEGAL DISCLAIMER
 # ==========================================
 st.warning("""
-**⚠️ STRICTLY FOR RESEARCH AND EDUCATIONAL USE ONLY**
+**⚠️ RESEARCH AND EDUCATIONAL USE ONLY**
 
-This application is an experimental informatics pipeline and technical proof-of-concept. It has **not** been cleared, approved, or evaluated by the U.S. Food and Drug Administration (FDA), the European Medicines Agency (EMA), or any other regulatory authority, and we make no claim about how it would be classified: using any output to derive a protamine dose may bring the tool within medical-device oversight, and that determination is jurisdiction-specific and is not one we attempt to make here. 
+This application is a research and educational instrument. Its intended purpose is to demonstrate and teach an informatics method under simulated conditions. It is **not intended for clinical use**, for the care or management of any patient, or to determine, inform or influence any drug dose. Within that intended purpose it is not a medical device.
 
-The predictive models, nomograms, and calculations provided by this software are strictly for educational and research purposes. They must **never** be used for clinical decision-making, patient care, or to dictate drug dosages. The user assumes all liability and risk associated with the use of this software. By continuing to use this application, you acknowledge and agree to these terms.
+Nothing here has been cleared, approved or evaluated by the U.S. Food and Drug Administration, the European Medicines Agency or any other regulatory authority. Its outputs have not been validated against measured anti-factor Xa activity, activated clotting time or clinical reversal in patients, and no clinical benefit has been demonstrated.
+
+Anyone using this tool outside the intended purpose stated above does so on their own responsibility, and may bring it within medical-device oversight in their jurisdiction; the authors accept no responsibility for such use and make no assessment of how any jurisdiction would classify it.
 """)
 
 # The peer-review password gate has been removed. EB-6 noted the contradiction
@@ -54,7 +56,9 @@ The predictive models, nomograms, and calculations provided by this software are
 # 1. SETUP & UTILS
 # ==========================================
 st.set_page_config(layout="wide", page_title="Heparin Decay Dashboard")
-APP_VERSION = "v1.2.0"
+# The dashboard carried its own APP_VERSION constant, which is how it came to
+# report v1.2.0 while the pipeline reported v2.0.0. It went unused here, so it is
+# simply gone; anything needing the version imports it from Nomogram_Models.
 
 # Model identity comes from one registry. The dashboard previously carried six
 # separate hardcoded lists, which is how the sidebar ended up spelling

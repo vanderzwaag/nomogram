@@ -179,3 +179,25 @@ def test_run_nomogram_is_reproducible(nomogram_models, tmp_path, monkeypatch):
 
     assert k_of(5) == k_of(5)
     assert k_of(5) != k_of(6)
+
+
+def test_one_version_string_for_the_whole_project(nomogram_models):
+    """The dashboard used to define its own APP_VERSION, and the two drifted:
+    the pipeline reported v2.0.0 while the dashboard still said v1.2.0."""
+    import re
+
+    assert nomogram_models.APP_VERSION.startswith("v")
+    dashboard = open("streamlit_app.py", encoding="utf-8").read()
+    body = "\n".join(line for line in dashboard.splitlines()
+                     if not line.strip().startswith("#"))
+    assert "APP_VERSION =" not in body, (
+        "streamlit_app.py defines its own version constant again"
+    )
+
+    changelog = open("CHANGELOG.md", encoding="utf-8").read()
+    latest = re.search(r"^## \[(\d+\.\d+\.\d+)\]", changelog, re.M)
+    assert latest, "CHANGELOG.md has no versioned release heading"
+    assert latest.group(1) == nomogram_models.APP_VERSION.lstrip("v"), (
+        f"changelog says {latest.group(1)} but the code says "
+        f"{nomogram_models.APP_VERSION}"
+    )
