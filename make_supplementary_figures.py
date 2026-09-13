@@ -8,6 +8,10 @@ Every curve is computed from the same seeded pipeline and the same calibrated
 constants as the tables, so the figures cannot drift from the text. Output is
 written as both PDF (vector, for typesetting) and PNG at 600 dpi.
 
+Figure 2   Bland-Altman agreement for the primary reference model, with the
+           proportional-bias regression drawn on it. This is a MAIN-TEXT figure;
+           it is produced here rather than in run_analysis so that every plotted
+           point comes from the same seeded test cohort as the agreement table.
 Figure S1  Reference-model decay trajectories with each model's own calibrated
            approximation, as small multiples.
 Figure S2  The two intervals on the approximation, drawn to scale (EB-2).
@@ -28,8 +32,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+import agreement as A
+import calibration as cal
 import nomogram_core as core
 import parameter_spaces as ps
+from run_analysis import STREAM
 
 # Categorical slots, in the fixed validated order. Assigned to models once and
 # never re-ordered, so a model keeps its colour across every figure.
@@ -93,13 +100,110 @@ def tidy(ax, grid_axis="y"):
 
 
 def save(fig, outdir: Path, stem: str):
-    for ext, kw in (("pdf", {}), ("png", {"dpi": 600})):
+    # CreationDate=None suppresses the embedded timestamp, which was the only
+    # thing that differed between two runs of this script -- with it the figures
+    # are byte-identical on re-run, like the rest of the frozen output.
+    for ext, kw in (("pdf", {"metadata": {"CreationDate": None}}),
+                    ("png", {"dpi": 600})):
         fig.savefig(outdir / f"{stem}.{ext}", **kw)
     plt.close(fig)
     print(f"  wrote {stem}.pdf and {stem}.png")
 
 
 # ==========================================================================
+
+def figure_2(k, spec, seed, outdir, model="lanoiselee", n_test=1000,
+             prime_timing="lumped_t0"):
+    """Bland-Altman agreement for the primary reference model (main text).
+
+    The cohort is rebuilt from the same stream run_analysis uses for its test
+    sample, so the bias, limits and regression drawn here are by construction
+    the ones in the agreement table -- the figure cannot quote different numbers
+    from the text, which is how the submitted Figure 2 came to disagree with the
+    manuscript body in the first place.
+    """
+    rng = np.random.default_rng(seed * 10 + STREAM["test_cohort"])
+    cohort = cal.sample_cohort(spec, n_test, rng)
+    times = cal.evaluation_times(cohort, "reversal_endpoint")
+    ref = cal.reference_values(cohort, model, times).ravel()
+    nom = cal.nomogram_values(cohort, times, k[model], prime_timing).ravel()
+
+    ba = A.bland_altman(ref, nom)
+    pb = A.proportional_bias(ref, nom)
+    rel = A.relative_errors(ref, nom)
+    cov = A.threshold_coverage(ref, nom)
+
+    diff = A.difference(ref, nom)
+    mean = (ref + nom) / 2.0
+    colour = COLOUR[model]
+
+    fig, ax = plt.subplots(figsize=(6.6, 4.4))
+    span_hint = max(abs(ba.loa_low), abs(ba.loa_high))
+    x0, x1 = mean.min(), mean.max()
+    pad = 0.035 * (x1 - x0)
+    xs = np.linspace(x0 - pad, x1 + pad, 200)
+
+    # Every horizontal reference stops at the data edge, leaving a clear gutter
+    # for its label -- axhline/axhspan would run the full width and strike the
+    # text through.
+    xl, xr = (x0 - pad) / 1000, (x1 + pad) / 1000
+
+    # Confidence ribbons first, so the lines they belong to sit on top.
+    for lo, hi in ((ba.bias_ci_low, ba.bias_ci_high),
+                   (ba.loa_low_ci_low, ba.loa_low_ci_high),
+                   (ba.loa_high_ci_low, ba.loa_high_ci_high)):
+        ax.fill_between([xl, xr], lo, hi, color=INK_3, alpha=0.16, lw=0,
+                        zorder=2)
+
+    ax.plot([xl, xr], [0, 0], color=GRID, lw=1.0, zorder=1)
+    ax.scatter(mean / 1000, diff, s=9, alpha=0.38, color=colour,
+               edgecolors="none", zorder=3)
+
+    ax.plot([xl, xr], [ba.bias] * 2, color=INK, lw=1.5, zorder=5)
+    for y in (ba.loa_low, ba.loa_high):
+        ax.plot([xl, xr], [y] * 2, color=INK_2, lw=1.1, ls=(0, (5, 3)),
+                zorder=5)
+
+    # The regression EB-3 asked for. A mean bias near zero says nothing about
+    # agreement when the error varies systematically with the magnitude.
+    ax.plot(xs / 1000, pb.intercept + pb.slope * xs, color="#eb6834", lw=1.8,
+            zorder=6)
+
+    # Direct labels in the right-hand gutter, rather than a legend box.
+    for y, text in ((ba.bias, f"bias {ba.bias:+.1f}"),
+                    (ba.loa_high, f"+1.96 SD  {ba.loa_high:+.1f}"),
+                    (ba.loa_low, f"−1.96 SD  {ba.loa_low:+.1f}")):
+        ax.text(xr + 0.3, y, text, fontsize=7.5, va="center",
+                color=INK if text.startswith("bias") else INK_2)
+
+    # The label sits in the empty wedge between the regression's low end and
+    # the lower limit, and takes its colour; a leader line would read as a
+    # second data series.
+    sig = "p < 0.001" if pb.slope_p < 1e-3 else f"p = {pb.slope_p:.3f}"
+    ax.text(xr - 0.3,
+            (pb.intercept + pb.slope * (x1 + pad) + ba.loa_low) / 2.0,
+            f"proportional bias\nslope {pb.slope:+.4f} ({sig})",
+            fontsize=7.5, color="#eb6834", linespacing=1.4,
+            ha="right", va="center")
+
+    ax.text(0.015, 0.04,
+            f"n = {ba.n}   MAPE {rel.mean_abs_pct_error:.2f}%   "
+            f"{cov['pct_within_threshold_iu']:.0f}% within "
+            f"{cov['threshold_iu']:,.0f} IU",
+            transform=ax.transAxes, fontsize=7.5, color=INK_2)
+
+    tidy(ax)
+    ax.set_xlim(xl, xr + 3.4)
+    ax.set_ylim(-1.55 * span_hint, 1.55 * span_hint)
+    ax.set_xlabel(f"Mean of {core.DISPLAY_NAMES[model]} and nomogram (×1000 IU)")
+    ax.set_ylabel("Difference, reference − nomogram (IU)")
+    ax.set_title(f"{core.DISPLAY_NAMES[model]} versus the calibrated nomogram\n"
+                 "positive = nomogram under-estimates residual heparin",
+                 fontsize=9.5, pad=7)
+    fig.tight_layout()
+    save(fig, outdir, "figure_2_bland_altman")
+    return ba, pb
+
 
 def figure_s1(k, spec, outdir):
     """Decay trajectories, one panel per reference model.
@@ -355,8 +459,18 @@ def main():
 
     sens = pd.read_csv(indir / "06_input_sensitivity.csv")
 
+    import json
+    manifest = json.loads((indir / "manifest.json").read_text())
+    seed = int(manifest["seed"])
+    n_test = int(manifest["sample_sizes"]["n_test_cohort"])
+    prime_timing = manifest["decisions"]["prime_timing"]
+
     print(f"Cohort: {spec.describe()}")
     print(f"Reading {indir}, writing {outdir}\n")
+    ba, pb = figure_2(k, spec, seed, outdir, n_test=n_test, prime_timing=prime_timing)
+    print(f"    Figure 2 statistics: bias {ba.bias:+.2f} IU, "
+          f"LoA {ba.loa_low:+.1f} to {ba.loa_high:+.1f}, "
+          f"slope {pb.slope:+.4f} (p {pb.slope_p:.2g})")
     figure_s1(k, spec, outdir)
     figure_s2(k, k_mc, k_pu, spec, outdir)
     figure_s3(k, spec, outdir)

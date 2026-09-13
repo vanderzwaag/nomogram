@@ -41,7 +41,7 @@ pip install -r requirements.txt          # pure Python; no system packages neede
 
 python run_analysis.py --seed 20260912 --outdir outputs/frozen
 python make_supplementary_figures.py
-python -m pytest tests/ -q               # 161 checks
+python -m pytest tests/ -q               # 162 checks
 
 streamlit run streamlit_app.py           # the interactive dashboard
 ```
@@ -82,10 +82,10 @@ anything unverified.
 | `benchmarks.py` | Implementation verification and reproduction of published values. |
 | `nomogram_render.py` | Nomogram geometry and rendering, shared by the printed PDF and the interactive chart. |
 | `run_analysis.py` | Regenerates every reported number from one seeded command. |
-| `make_supplementary_figures.py` | Supplementary figures S1–S4. |
+| `make_supplementary_figures.py` | Main-text Figure 2 and supplementary figures S1–S4. |
 | `Nomogram_Models.py` | Dashboard-facing wrappers and figures. |
 | `streamlit_app.py` | The dashboard. |
-| `tests/` | 161 checks. |
+| `tests/` | 162 checks. |
 
 ## How the nomogram works
 

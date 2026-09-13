@@ -161,9 +161,14 @@ comment identifiers (EB-1…EB-8, R1, R2) are given where a change answers one.
 - **`run_analysis.py`** regenerates every reported number from one seeded
   command into a dated directory with a manifest recording seed, commit,
   package versions and every analysis decision.
-- **`make_supplementary_figures.py`** renders supplementary figures S1–S4 from
-  the frozen run, as PDF and 600 dpi PNG.
-- **161 automated tests**, including an end-to-end execution of the dashboard
+- **`make_supplementary_figures.py`** renders main-text Figure 2 and
+  supplementary figures S1–S4 from the frozen run, as PDF and 600 dpi PNG.
+  Figure 2 was previously drawn only inside the dashboard and never written to
+  disk, so the figure the manuscript showed could not be traced to a run; it is
+  now rebuilt from the same seeded test cohort as the agreement table and
+  therefore cannot quote different numbers from the text. PDF timestamps are
+  suppressed so re-running reproduces the figures byte-for-byte.
+- **162 automated tests**, including an end-to-end execution of the dashboard
   against a recording Streamlit stub.
 - **New modules:** `nomogram_core`, `calibration`, `agreement`,
   `parameter_spaces`, `topup`, `benchmarks`, `nomogram_render`.
