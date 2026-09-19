@@ -1,7 +1,7 @@
 # Frozen analysis run
 
-- Generated: 2026-09-19T16:19:45.912083+00:00
-- Commit: `befe3d8`
+- Generated: 2026-09-19T16:55:59.387016+00:00
+- Commit: `a81cfec`
 - Seed: `20260912`
 - Cohort: grid_snapped_70_15_60: 400 IU/kg, prime 5000 IU, IBW 70+/-10 kg, time to CPB 15+/-3.75 min, time on CPB 60+/-15 min [adult]
 - Sign convention: Difference = reference model - nomogram (positive = nomogram under-estimates)
@@ -150,7 +150,7 @@ Every interval above is propagated from uncertainty the source publications actu
 
 ## Transportability to shifted institutions (EB-4)
 
-Mean absolute percentage error when the canonically calibrated k is applied unchanged to a shifted population. Adult models are not run All six models are adult and are evaluated in the same populations; the small_bodied_adults row matches the body size the Jia model was derived in (EB-4, R1 p11 L46).
+Mean absolute percentage error when the canonically calibrated k is applied unchanged to a shifted population. Every reference model is adult, so all are evaluated in the same populations; the small_bodied_adults row matches the body size the Jia model was derived in (EB-4, R1 p11 L46).
 
 | Institution | delavenne | jia | lanoiselee | meesters | prodose |
 |---|---|---|---|---|---|
@@ -163,6 +163,28 @@ Mean absolute percentage error when the canonically calibrated k is applied unch
 | slow_start | 15.77 | 2.19 | 2.51 | 3.23 | 3.75 |
 | small_bodied_adults | 12.70 | 0.52 | 0.49 | 1.38 | 1.39 |
 | wide_case_mix | 21.92 | 1.10 | 1.24 | 3.54 | 3.55 |
+
+## Correlated inputs (R2)
+
+Weight, time to bypass and time on bypass are drawn independently in the main analysis. Here they are drawn from a Gaussian copula imposing the stated pairwise correlation on the latent normals, which is the demonstrative answer to the covariance point. The latent normals are correlated through a Cholesky factor: the equicorrelation matrix has a repeated eigenvalue, so an SVD would pick an arbitrary basis and the result would depend on the linear-algebra library rather than on the seed.
+
+| Model | Correlation | Bias (IU) | 95% LoA (IU) | MAPE (%) |
+|---|---|---|---|---|
+| Delavenne | 0.0 | -55.40 | -3,567 to 3,456 | 9.75 |
+| Delavenne | 0.3 | -60.89 | -4,257 to 4,135 | 11.74 |
+| Delavenne | 0.6 | -68.63 | -4,908 to 4,770 | 13.64 |
+| Jia | 0.0 | +1.66 | -205 to 209 | 0.45 |
+| Jia | 0.3 | -1.55 | -178 to 175 | 0.38 |
+| Jia | 0.6 | -4.65 | -144 to 134 | 0.30 |
+| Lanoiselée | 0.0 | +1.29 | -184 to 187 | 0.40 |
+| Lanoiselée | 0.3 | -0.49 | -159 to 158 | 0.34 |
+| Lanoiselée | 0.6 | -1.83 | -127 to 124 | 0.27 |
+| Meesters | 0.0 | +3.73 | -787 to 795 | 1.30 |
+| Meesters | 0.3 | +9.93 | -782 to 802 | 1.31 |
+| Meesters | 0.6 | +16.58 | -796 to 829 | 1.34 |
+| PRODOSE | 0.0 | +4.05 | -681 to 689 | 1.27 |
+| PRODOSE | 0.3 | +8.13 | -674 to 690 | 1.28 |
+| PRODOSE | 0.6 | +12.23 | -683 to 707 | 1.30 |
 
 ## Most influential inputs, +/-20% (EB-8)
 
