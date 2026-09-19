@@ -4,8 +4,9 @@ All notable changes to this project are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
-Every release is reproducible: the analysis regenerates byte-for-byte from a
-single seeded command at the tagged commit. See [REPRODUCIBILITY.md](REPRODUCIBILITY.md).
+Every release is reproducible: the analysis regenerates from a single seeded
+command at the tagged commit, byte-for-byte on the machine it was built on and
+to within floating-point rounding anywhere else. See [REPRODUCIBILITY.md](REPRODUCIBILITY.md).
 
 ---
 
@@ -221,13 +222,16 @@ comment identifiers (EB-1…EB-8, R1, R2) are given where a change answers one.
 - **Continuous integration** on every push: the suite on Python 3.10 and 3.11,
   every test file again in isolation, a check that the reported numbers are
   unchanged on current library releases, and a separate job that regenerates
-  the archive byte-for-byte in the pinned environment. The reproducibility
+  the archive to a tolerance three orders tighter in the pinned environment.
+  The reproducibility
   claim is now asserted rather than asserted about.
-- **`check_frozen.py`** compares a run against the archive, to a relative
-  tolerance by default and byte-for-byte with `--exact`. The distinction is
-  real: byte identity holds only in the environment `requirements-frozen.txt`
-  pins, while agreement of the numbers holds anywhere. Drift between the
-  archive's environment and one a major release behind is 5e-14 at worst.
+- **`check_frozen.py`** compares a run against the archive and reports the
+  largest relative difference it found. The default asserts the numbers agree;
+  `--exact` asserts the files are identical. Byte identity holds on the machine
+  the archive was built on, and is a claim about that machine rather than about
+  the analysis -- the last bit of a transcendental function is not specified by
+  IEEE 754. Equality of the reported numbers is the claim that travels, and
+  drift against an environment a major release behind is 5e-14 at worst.
 - **`requirements-frozen.txt`** pinning the exact package versions the archived
   run used, so the published numbers can be reproduced to the last digit.
   `requirements.txt` installs current releases and no longer pulls in Streamlit:

@@ -50,17 +50,14 @@ jobs:
           done
 
       - name: Check the reported numbers are unchanged
-        # On current releases the bytes may differ -- a different scipy
-        # converges its optimiser a fraction differently -- so this asserts the
-        # claim that has to hold everywhere: every number agrees. Byte
-        # identity is checked in the reproduce job, in the environment where it
-        # is a meaningful claim.
+        # The claim that has to hold everywhere: every number agrees. Bytes
+        # need not, and across machines cannot be expected to.
         run: |
           python run_analysis.py --seed 20260912 --outdir /tmp/check
           python check_frozen.py /tmp/check
 
   reproduce:
-    name: byte-for-byte reproduction
+    name: reproduction in the pinned environment
     runs-on: ubuntu-latest
 
     steps:
@@ -77,7 +74,14 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements-frozen.txt
 
-      - name: Regenerate the frozen run and require identical files
+      - name: Regenerate the frozen run and require a tight match
+        # Not --exact. Byte identity is a property of one machine: the last bit
+        # of a transcendental function is not specified by IEEE 754, so a
+        # different libm moves a result by one ulp and every number downstream
+        # follows. The runner is not the machine the archive was built on. A
+        # tolerance three orders tighter than the suite job's still fails on
+        # anything that is not rounding, and the step prints the largest
+        # difference it found either way.
         run: |
           python run_analysis.py --seed 20260912 --outdir /tmp/check
-          python check_frozen.py /tmp/check --exact
+          python check_frozen.py /tmp/check --tolerance 1e-12

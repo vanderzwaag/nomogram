@@ -12,19 +12,25 @@ python -m pytest tests/ -q               # the full suite, including implementat
 ```
 
 Pure Python; no system packages. `requirements.txt` installs current releases
-instead: the numbers agree, but the last bits need not, because a different
-scipy converges its optimiser a fraction differently and a different pandas can
-format a float differently. Measured drift against an environment a major
-release behind (numpy 2.2.6, scipy 1.15.3, pandas 2.3.3) is 5e-14 at worst, in
-a p-value -- fourteen orders of magnitude below anything reported.
+instead: the numbers agree, but the last bits need not. Measured drift against
+an environment a major release behind (numpy 2.2.6, scipy 1.15.3, pandas 2.3.3)
+is 5e-14 at worst, in a p-value of 5e-77 -- far below any reported precision.
 
-`python check_frozen.py <dir>` compares a run against the archive: numbers
-equal to a relative tolerance by default, byte-identical with `--exact`. Both
-run in CI, the second in the pinned environment.
+`python check_frozen.py <dir>` compares a run against the archive and prints
+the largest relative difference it found. The default tolerance is 1e-9; CI
+runs it on current releases and again at 1e-12 in the pinned environment.
+
+`--exact` requires byte-identical files. That holds on the machine the archive
+was built on and is worth being able to check, but it is a claim about a
+machine rather than about the analysis: the last bit of a transcendental
+function is not specified by IEEE 754, so a different libm moves a result by
+one unit in the last place and everything computed from it follows. Equality of
+the reported numbers is the claim that travels.
 
 `outputs/frozen/summary.md` holds the values to quote; `outputs/frozen/manifest.json`
 records the seed, the git commit, the package versions and every analysis
-decision. Re-running with the same seed reproduces every CSV byte-for-byte.
+decision. Re-running with the same seed reproduces every reported number;
+on the same machine it reproduces every CSV byte-for-byte.
 
 ## What changed, and which reviewer comment it answers
 

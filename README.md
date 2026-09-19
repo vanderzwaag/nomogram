@@ -80,11 +80,16 @@ To check a run against the archive:
 python check_frozen.py outputs/frozen
 ```
 
-With the pinned environment the files are byte-identical; on current releases
-the numbers agree but the last bits may not, because a different scipy
-converges its optimiser a fraction differently. Measured drift against an
-environment a major release behind is 5e-14 at worst, in a p-value. Pass
-`--exact` to require identical bytes.
+The numbers agree to a relative tolerance of 1e-9 by default, and the check
+prints the largest difference it found. Measured drift against an environment a
+major release behind (numpy 2.2.6, scipy 1.15.3, pandas 2.3.3) is 5e-14 at
+worst, in a p-value of 5e-77.
+
+`--exact` requires byte-identical files. That holds when you re-run on the same
+machine in the pinned environment, and it is worth being able to check, but it
+is a claim about a machine rather than about the analysis: the last bit of a
+transcendental function is not specified by IEEE 754, so a different libm moves
+a result by one unit in the last place and everything downstream follows.
 
 `python run_analysis.py --help` lists the options: the cohort, the calibration
 objective, the evaluation mode, the prime-timing convention and the sample
@@ -124,7 +129,7 @@ are recorded per model in `nomogram_core.MODEL_PARAMETERS`.
 
 ```
 ├── .github/workflows/ CI: the suite, each test file alone, and a check that
-│                      the frozen run still regenerates byte-for-byte
+│                      the reported numbers are unchanged
 ├── data/k_tables/     calibrated k per grid node, one CSV per model
 ├── outputs/frozen/    the archived run: tables, figures, manifest, summary
 ├── tests/             the test suite

@@ -8,18 +8,23 @@ Check that a fresh run reproduces the frozen one.
 
 Two claims, and they are not the same claim.
 
-``--exact`` asserts every CSV is byte-identical. That holds only in the
-environment the archive was produced in, which ``requirements-frozen.txt``
-pins: a different scipy converges its optimiser a fraction differently, and a
-different pandas can format a float differently, so bytes drift even though
-nothing about the analysis has changed.
+``--exact`` asserts every CSV is byte-identical. That is a claim about one
+machine, not about the analysis. Re-running on the same machine in the pinned
+environment reproduces the archive exactly, and that is worth being able to
+check. Across machines it does not hold and cannot be made to: the last bit of
+a transcendental function is not specified by IEEE 754, so a different libm,
+or a different build of one, moves a result by one unit in the last place, and
+everything downstream of it follows.
 
-The default asserts instead that every number agrees to a relative tolerance.
-That is the claim worth making across environments, and it is the one that
-fails if a result has actually moved. Measured drift between the archive's
-environment and one a major release behind (numpy 2.2.6, scipy 1.15.3, pandas
-2.3.3) is 5e-14 at worst, in a p-value -- fourteen orders of magnitude below
-anything reported.
+The default asserts instead that every number agrees to a relative tolerance,
+which is the claim that holds anywhere and the one that fails if a result has
+actually moved. Both modes print the largest relative difference they found,
+so a pass says how close it came and a failure says whether it is rounding or
+a result moving.
+
+Measured drift between the archive's environment and one a major release
+behind (numpy 2.2.6, scipy 1.15.3, pandas 2.3.3) is 5e-14 at worst, in a
+p-value of 5e-77 -- far below any reported precision.
 
 The manifest is compared by its decisions rather than its bytes, since it
 records the timestamp and commit of its own run.
@@ -39,14 +44,20 @@ FROZEN = Path(__file__).resolve().parent / "outputs" / "frozen"
 MANIFEST_KEYS = ("decisions", "sample_sizes", "parameter_provenance", "csv_outputs")
 
 
-def compare_csv(frozen: Path, fresh: Path, tolerance: float | None) -> list:
-    """Differences between one pair of CSVs, as human-readable lines."""
+def compare_csv(frozen: Path, fresh: Path, tolerance: float | None,
+                worst: dict) -> list:
+    """Differences between one pair of CSVs, as human-readable lines.
+
+    ``worst`` accumulates the largest relative difference seen anywhere, so a
+    run that passes still says how close it came and a run that fails says how
+    far off it is. Reporting only pass or fail leaves the one question that
+    matters -- is this rounding or a result moving? -- unanswered.
+    """
     if not fresh.exists():
         return [f"{frozen.name}: missing from the fresh run"]
-    if frozen.read_bytes() == fresh.read_bytes():
+    identical = frozen.read_bytes() == fresh.read_bytes()
+    if identical and tolerance is not None:
         return []
-    if tolerance is None:
-        return [f"{frozen.name}: differs byte-for-byte"]
 
     a, b = pd.read_csv(frozen), pd.read_csv(fresh)
     if list(a.columns) != list(b.columns):
@@ -68,10 +79,16 @@ def compare_csv(frozen: Path, fresh: Path, tolerance: float | None) -> list:
         finite = ~np.isnan(xv)
         with np.errstate(divide="ignore", invalid="ignore"):
             rel = np.abs(xv[finite] - yv[finite]) / np.maximum(np.abs(xv[finite]), 1e-300)
-        if rel.size and rel.max() > tolerance:
-            worst = int(np.argmax(rel))
+        if rel.size and rel.max() > worst["value"]:
+            row = int(np.argmax(rel))
+            worst.update(value=float(rel.max()), where=f"{frozen.name} '{column}' row {row}",
+                         frozen=float(xv[finite][row]), fresh=float(yv[finite][row]))
+        if tolerance is not None and rel.size and rel.max() > tolerance:
+            row = int(np.argmax(rel))
             out.append(f"{frozen.name}: '{column}' differs by {rel.max():.3e} "
-                       f"(row {worst}: {xv[finite][worst]!r} vs {yv[finite][worst]!r})")
+                       f"(row {row}: {xv[finite][row]!r} vs {yv[finite][row]!r})")
+    if tolerance is None and not identical:
+        out.append(f"{frozen.name}: differs byte-for-byte")
     return out
 
 
@@ -90,11 +107,12 @@ def main() -> int:
     tolerance = None if args.exact else args.tolerance
 
     drift = []
+    worst = {"value": 0.0, "where": None, "frozen": None, "fresh": None}
     frozen_csvs = sorted(frozen.glob("*.csv"))
     if not frozen_csvs:
         sys.exit(f"no frozen CSVs found in {frozen}")
     for path in frozen_csvs:
-        drift += compare_csv(path, fresh / path.name, tolerance)
+        drift += compare_csv(path, fresh / path.name, tolerance, worst)
 
     extra = {q.name for q in fresh.glob("*.csv")} - {q.name for q in frozen_csvs}
     for name in sorted(extra):
@@ -106,14 +124,22 @@ def main() -> int:
         if a.get(key) != b.get(key):
             drift.append(f"manifest['{key}'] differs")
 
+    if worst["where"] is None:
+        magnitude = "every number is bit-identical"
+    else:
+        magnitude = (f"largest relative difference {worst['value']:.3e} at "
+                     f"{worst['where']} ({worst['frozen']!r} vs {worst['fresh']!r})")
+
     if drift:
         print("the fresh run does not reproduce the archive:", file=sys.stderr)
         for line in drift:
             print(f"  {line}", file=sys.stderr)
+        print(f"  {magnitude}", file=sys.stderr)
         return 1
 
     how = "byte-for-byte" if args.exact else f"to a relative tolerance of {args.tolerance:g}"
     print(f"all {len(frozen_csvs)} frozen CSVs and the manifest decisions reproduce {how}")
+    print(f"  {magnitude}")
     return 0
 
 
