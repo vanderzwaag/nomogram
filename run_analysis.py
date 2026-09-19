@@ -580,8 +580,8 @@ def _write_summary(outdir, args, spec, k_table, agr, obj, sens, modes, ptim,
              f"scipy {manifest['software_versions']['scipy']}, "
              f"pandas {manifest['software_versions']['pandas']}\n")
 
-    L.append(f"## Calibrated decay constant, all {len(core.MODEL_NAMES)} "
-             "active models (EB-8)\n")
+    L.append("## Calibrated decay constant, every active reference model "
+             "(EB-8)\n")
     t = k_table[["display_name", "population", "k", "mc_interval_low",
                  "mc_interval_high", "half_life_min"]].copy()
     L.append("| Model | Population | k (/min) | MC sampling interval | Apparent t1/2 (min) |")

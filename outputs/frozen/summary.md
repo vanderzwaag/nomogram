@@ -1,7 +1,7 @@
 # Frozen analysis run
 
-- Generated: 2026-09-19T14:24:03.188453+00:00
-- Commit: `2caf540`
+- Generated: 2026-09-19T15:18:35.932965+00:00
+- Commit: `6ca200c`
 - Seed: `20260912`
 - Cohort: grid_snapped_70_15_60: 400 IU/kg, prime 5000 IU, IBW 70+/-10 kg, time to CPB 15+/-3.75 min, time on CPB 60+/-15 min [adult]
 - Sign convention: Difference = reference model - nomogram (positive = nomogram under-estimates)
@@ -10,7 +10,7 @@
 - Clinical threshold: 1000 IU (10 mg protamine at 1 mg:100 IU) or 10%
 - Software: python 3.11.15, numpy 2.4.6, scipy 1.17.1, pandas 3.0.5
 
-## Calibrated decay constant, all six models (EB-8)
+## Calibrated decay constant, all 5 active models (EB-8)
 
 | Model | Population | k (/min) | MC sampling interval | Apparent t1/2 (min) |
 |---|---|---|---|---|
@@ -21,6 +21,17 @@
 | PRODOSE | adult | 0.00550 | 0.00548 to 0.00551 | 126 |
 
 The interval is a Monte Carlo sampling-precision interval. It does **not** quantify uncertainty in the published PK parameters, in the institutional input estimates, in model selection, or in an individual patient's prediction (EB-2).
+
+## Calibration grid (EB-8)
+
+```
+Adult calibration grid (2304 nodes):
+  heparin dose   : [250, 300, 350, 400, 450, 500, 550, 600] IU/kg
+  ideal body wt  : [40, 55, 70, 85, 100, 115] kg
+  prime heparin  : [0, 5000, 10000] IU
+  time to CPB    : [5, 15, 25, 35] min
+  time on CPB    : [30, 60, 90, 120] min
+```
 
 ## Agreement on an internal resample (EB-3)
 
