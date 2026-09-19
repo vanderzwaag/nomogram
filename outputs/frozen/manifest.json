@@ -1,5 +1,5 @@
 {
-  "generated_utc": "2026-09-19T15:19:05.530656+00:00",
+  "generated_utc": "2026-09-19T15:42:18.795922+00:00",
   "analysis_version": "2.0.0",
   "core_version": "2.0.0",
   "render_version": "2.0.0",
@@ -20,10 +20,10 @@
   },
   "command_line": "run_analysis.py --seed 20260912 --outdir outputs/frozen",
   "git": {
-    "commit": "595a66ba515b5b571d15acf1cfec810f4cf80233",
-    "short_commit": "595a66b",
+    "commit": "4fc19723d4cfa0f84a7b177375c79b575c1caac9",
+    "short_commit": "4fc1972",
     "branch": "claude/manuscript-revision-code-j9hc9b",
-    "describe": "595a66b",
+    "describe": "4fc1972",
     "dirty": false
   },
   "software_versions": {
