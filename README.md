@@ -17,16 +17,15 @@ reports regenerates from one seeded command at a tagged commit.
 
 ## What it does
 
-Six published models describe how unfractionated heparin leaves the central
-compartment during cardiopulmonary bypass. They are biexponential, they need a
-computer, and they disagree with one another. A nomogram is a straightedge and a
-sheet of paper.
+Published pharmacokinetic models of unfractionated heparin during
+cardiopulmonary bypass are biexponential and require a computer to evaluate. A
+nomogram does not.
 
 This pipeline asks how well a single exponential — one decay constant *k*,
 calibrated to an institution's own dosing, weight and bypass-time distributions
 — can approximate a chosen reference model, and quantifies where it fails. The
 answer differs sharply by model: for Lanoiselée and Jia the approximation holds
-to under 0.5% mean absolute error, for Delavenne it does not hold at all
+to under 0.5% mean absolute error; for Delavenne it does not hold at all
 (10.3%, and 72% after repeated supplemental boluses).
 
 **What it does not do.** It represents the pharmacokinetic central-compartment
@@ -36,22 +35,60 @@ antithrombin, protamine pharmacology or heparin rebound. Converting a residual
 amount into a protamine dose requires applying an institutional ratio, which
 this pipeline does not supply.
 
-## Quick start
+## Installation
+
+Python 3.10 or newer. Pure Python — no system packages, no LaTeX, no compiler.
 
 ```bash
-pip install -r requirements.txt          # pure Python; no system packages needed
+git clone https://github.com/vanderzwaag/nomogram.git
+cd nomogram
 
+python -m venv .venv
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
+
+python -m pip install -r requirements.txt
+```
+
+To reproduce the published numbers exactly, install the versions the archived
+run used instead:
+
+```bash
+python -m pip install -r requirements-frozen.txt
+```
+
+Verify the installation:
+
+```bash
+python -m pytest tests/ -q         # 163 checks, ~10 s
+```
+
+## Running it
+
+```bash
 python run_analysis.py --seed 20260912 --outdir outputs/frozen
 python make_supplementary_figures.py
-python -m pytest tests/ -q               # 163 checks
-
-streamlit run streamlit_app.py           # the interactive dashboard
 ```
 
 `outputs/frozen/summary.md` holds every value in manuscript-ready tables.
 `outputs/frozen/manifest.json` records the seed, the git commit, package
 versions and every analysis decision. Re-running with the same seed reproduces
 every file byte-for-byte.
+
+`python run_analysis.py --help` lists the options: the cohort, the calibration
+objective, the evaluation mode, the prime-timing convention and the sample
+sizes are all switchable, and each is recorded in the manifest.
+
+### The dashboard
+
+```bash
+python -m pip install streamlit
+streamlit run streamlit_app.py
+```
+
+This opens a local instance in your browser at `http://localhost:8501`. **There
+is no hosted deployment** — the dashboard runs only on the machine you start it
+on, and nothing it computes leaves that machine. It is not required for any
+result in the manuscript: `run_analysis.py` produces all of those without it.
 
 ## Reference models
 
@@ -68,9 +105,8 @@ A withheld model keeps its implementation, parameters and tests; it simply does
 not appear in the pipeline. Moving one in or out is a single line in
 `nomogram_core.PENDING_MODELS`.
 
-Published parameter values, their provenance and their reported uncertainty are
-recorded per model in `nomogram_core.MODEL_PARAMETERS`, including notes on
-anything unverified.
+Published parameter values, their provenance and their reported uncertainty
+are recorded per model in `nomogram_core.MODEL_PARAMETERS`.
 
 ## Layout
 
@@ -117,10 +153,9 @@ Every draw of randomness comes from an explicit seeded generator, and each stage
 of the analysis draws from its own independent stream derived from the master
 seed, so adding a stage cannot shift the numbers produced by the others.
 
-[REPRODUCIBILITY.md](REPRODUCIBILITY.md) documents what changed and why, per
-reviewer comment, and lists the defects found while doing it — including two
-transcription errors in published parameter values that were invisible to
-inspection and silent at runtime.
+[REPRODUCIBILITY.md](REPRODUCIBILITY.md) records what each analysis decision
+is and why, per reviewer comment, together with the defects corrected in the
+course of making the analysis reproducible.
 
 **Verification.** 25 automatic checks confirm each closed-form solution actually
 solves its own differential equations and satisfies the identities they imply.

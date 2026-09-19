@@ -6,15 +6,18 @@ doi:[10.5281/zenodo.22846043](https://doi.org/10.5281/zenodo.22846043)
 command:
 
 ```bash
-pip install -r requirements.txt          # pure Python; no system packages needed
+pip install -r requirements-frozen.txt   # the exact versions the run used
 python run_analysis.py --seed 20260912 --outdir outputs/frozen
 python -m pytest tests/ -q               # 163 checks, including implementation verification
 ```
 
+Pure Python; no system packages. `requirements.txt` installs current releases
+instead, which run the pipeline but do not guarantee the published numbers to
+the last digit.
+
 `outputs/frozen/summary.md` holds the values to quote; `outputs/frozen/manifest.json`
-records the seed, the git commit, the package versions, every analysis decision
-and the outstanding author decisions. Re-running with the same seed reproduces
-every CSV byte-for-byte.
+records the seed, the git commit, the package versions and every analysis
+decision. Re-running with the same seed reproduces every CSV byte-for-byte.
 
 ## What changed, and which reviewer comment it answers
 
@@ -35,7 +38,9 @@ every CSV byte-for-byte.
 
 ## Defects found while doing this
 
-These are code defects, not wording problems, and each one changes numbers:
+These are code defects rather than wording problems. Most change reported
+numbers; the naming and duplication items are noted because they are how the
+inconsistencies arose:
 
 1. **No seeding anywhere.** Nine unseeded `np.random` calls. Because the primary
    objective drives the mean bias to nearly zero, the residual bias came out at
@@ -54,27 +59,19 @@ These are code defects, not wording problems, and each one changes numbers:
    dose. The top-up analysis passed a 5,000 IU bolus through the PRODOSE
    trajectory as if it were an induction dose, giving it the half-life of a
    71 IU/kg dose instead of the patient's own.
-6. **Jia interindividual variability contradicted its own docstring.** The
-   docstring gave CL 0.176 / Vc 0.114 / Q 0.0573 / Vp 0.111; the code used
-   `[0.073, 0.081, 0.144, 0.318]` in a different order, and took their square
-   root, so it treated them as variances where the other two models treated
-   theirs as standard deviations. Both sets were wrong; see 13 below for what
-   the source actually publishes and what the code now holds. **Resolved.**
-7. **Jia has no weight covariate,** so a 3 kg neonate and a 70 kg adult were
-   given identical kinetics. That looked like a defect only while the model was
-   believed to be paediatric; it is a faithful implementation of an adult model
-   with no covariate. See 15. **Resolved** — IBW scales the administered bolus
-   but never the elimination, and that is now stated where it matters.
-8. **Two spellings of the Lanoiselée Q parameter** (4.7928 in the endpoint model,
+6. **Jia interindividual variability contradicted its own docstring** — the
+   code and the docstring gave different numbers in different orders, and both
+   were wrong. See 10, which records what the source publishes.
+7. **Two spellings of the Lanoiselée Q parameter** (4.7928 in the endpoint model,
    287.57/60 = 4.79283 in the credible-interval simulation). Worth about 0.02 IU;
    documented and unified.
-9. **The k search bound is binding for Delavenne.** In 29 of 2304 nodes of the
+8. **The k search bound is binding for Delavenne.** In 29 of 2304 nodes of the
    shipped table the scenario range reaches the 0.03 /min upper bound, so that
-   value is the bound rather than an optimum. The interval is
-   0.001–0.03 /min — note that the draft response document guesses "0.001–0.05".
-10. **The "bootstrap" resamples nothing** and the "posterior" has no prior. Both
-    are Monte Carlo replicate simulations; renamed, with the old names aliased.
-11. **Duplicated model equations.** The trajectory was implemented in
+   value is the bound rather than an optimum. The interval is 0.001–0.03 /min,
+   and nodes that reach a bound are flagged.
+9. **The "bootstrap" resamples nothing** and the "posterior" has no prior. Both
+   are Monte Carlo replicate simulations; renamed, with the old names aliased.
+10. **Duplicated model equations.** The trajectory was implemented in
     `streamlit_app.py` and the endpoint in `Nomogram_Models.py`. Both now come
     from `nomogram_core`, and a test asserts they agree at the reversal timepoint.
 
@@ -84,13 +81,13 @@ Three variability transcriptions were checked against the published tables. One
 was right. Every point estimate was correct, so no calibrated `k` was affected —
 the damage was confined to the credible bands and the uncertainty propagation.
 
-12. **Lanoiselée's IIV was the wrong column.** The code held
+11. **Lanoiselée's IIV was the wrong column.** The code held
     `0.0983 / 0.111 / 0.395 / 0.21`, which are that column's parenthetical %RSE
     values (9.83, 11.1, 39.5, 21.0) divided by 100 — the precision of the
     variability estimates, not the variability. All four matched to the digit.
     True values are 2.1× larger, so every Lanoiselée credible band was about half
     the width it should have been.
-13. **Jia's IIV was wrong three times over.** The code held
+12. **Jia's IIV was wrong three times over.** The code held
     `[0.073, 0.081, 0.144, 0.318]` under a comment declaring the order
     `[Cl, Vc, Vp, Q]`. Those are the *population-mean* %RSE column
     (7.25, 8.09, 14.40, 31.8) ÷ 100, in the source's printed row order
@@ -100,10 +97,10 @@ the damage was confined to the credible bands and the uncertainty propagation.
     at zero**, and Q was overstated 1.8×. The function's own docstring gave yet a
     third set (0.176 / 0.114 / 0.0573 / 0.111) matching no column under any
     transformation; discarded.
-14. **Delavenne was correct** — values, not parentheticals, with Vp and Q properly
+13. **Delavenne was correct** — values, not parentheticals, with Vp and Q properly
     at zero. It is the control that established the other two were errors rather
     than a different convention.
-15. **Jia is not a paediatric model.** The manuscript describes it as paediatric
+14. **Jia is not a paediatric model.** The manuscript describes it as paediatric
     and both EB-4 and R1 p11 L46 follow from that description, but it is an adult
     cardiac-surgical study in a relatively small-bodied population. Its Vc of
     3.04 L is within 2% of Delavenne's adult 3.1 L; a 10 kg child would be near
@@ -111,7 +108,7 @@ the damage was confined to the credible bands and the uncertainty propagation.
     paediatric re-analysis.** The paediatric grid, paediatric cohorts and the
     allometric-scaling option built for it have been removed; a `small_bodied_adults`
     institution now tests the transportability question that was actually being asked.
-16. **Two independent nomogram implementations, fed by two different constants.**
+15. **Two independent nomogram implementations, fed by two different constants.**
     The PDF was drawn by PyNomo from the replicate-mean `k`; the on-screen chart
     was a separate matplotlib implementation reading `k_mu` from the lookup
     table. That is the "several constants in circulation" defect of EB-3,
@@ -119,14 +116,14 @@ the damage was confined to the credible bands and the uncertainty propagation.
     Removing PyNomo also removed PyX, LaTeX, Ghostscript, ReportLab and PyPDF2 —
     eight system packages — and made the printed nomogram testable: it was
     previously the only output the suite could not cover.
-17. **The dashboard carried six hardcoded model lists.** That is how the sidebar
+16. **The dashboard carried six hardcoded model lists.** That is how the sidebar
     came to spell "Lanoiselee" without the acute accent while the reports and
     figures spelled it correctly. Identity now comes from one registry, and a
     test executes the whole dashboard and asserts the labels match it.
-18. **No lookup table was ever shipped for PRODOSE-2**, and the five that
+17. **No lookup table was ever shipped for PRODOSE-2**, and the five that
     existed predated seeding. All six are regenerated deterministically and
     carry a `__metadata__` record of seed, grid, sample size and conventions.
-19. **Delavenne's weight exponents were literals.** `(w/70)**1.0` and `**0.767`
+18. **Delavenne's weight exponents were literals.** `(w/70)**1.0` and `**0.767`
     were hard-coded, so the 29% RSE on the clearance exponent could not be
     propagated. They are parameters now. Because the covariate is centred on
     70 kg, that uncertainty contributes *exactly nothing* at the canonical
@@ -251,6 +248,3 @@ reader of the archive can see what was chosen without reading this file.
   PK/PD reference models disagree with each other by 90–125 s in predicted ACT
   at the same anti-Xa concentration, with maximal responses of 520 s and 836 s,
   which is precisely why the pipeline stops at the amount.
-
-The one thing still owed is to the manuscript, not the code: its description of
-the Jia model as paediatric must be corrected in the text.

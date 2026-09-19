@@ -1,11 +1,14 @@
-# Dashboard
-streamlit
+# Analysis pipeline, figures, nomogram rendering and the test suite.
+# Pure Python: no system packages, no LaTeX, no compiler.
 
-# Analysis pipeline, figures and nomogram rendering
 numpy
 scipy
 pandas
 matplotlib
-
-# Test suite
 pytest
+
+# The dashboard is optional and is not needed for any result in the manuscript.
+# Install it separately if you want it:
+#
+#   python -m pip install streamlit
+#   streamlit run streamlit_app.py

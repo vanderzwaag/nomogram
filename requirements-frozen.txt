@@ -1,0 +1,18 @@
+# Exact versions the archived run was produced with, taken from
+# outputs/frozen/manifest.json, which records them at run time.
+#
+#   python -m pip install -r requirements-frozen.txt
+#
+# Produced on Python 3.11.15, Linux, glibc 2.39.
+#
+# Use this file to reproduce the published numbers exactly; use
+# requirements.txt to run the pipeline on current releases.
+
+numpy==2.4.6
+scipy==1.17.1
+pandas==3.0.5
+matplotlib==3.11.2
+
+# Not pinned, because neither affects the numbers and neither is recorded in
+# the manifest: pytest (test runner) and streamlit (dashboard only, and not
+# installed in the environment that produced the frozen run).

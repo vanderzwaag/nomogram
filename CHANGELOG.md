@@ -173,6 +173,10 @@ comment identifiers (EB-1…EB-8, R1, R2) are given where a change answers one.
 - **New modules:** `nomogram_core`, `calibration`, `agreement`,
   `parameter_spaces`, `topup`, `benchmarks`, `nomogram_render`.
 - **`REPRODUCIBILITY.md`**, `LICENSE` (MIT), `CITATION.cff` and this changelog.
+- **`requirements-frozen.txt`** pinning the exact package versions the archived
+  run used, so the published numbers can be reproduced to the last digit.
+  `requirements.txt` installs current releases and no longer pulls in Streamlit:
+  the dashboard is optional and is not needed for any reported result.
 
 ### Documentation
 
