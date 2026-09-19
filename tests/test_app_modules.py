@@ -201,3 +201,29 @@ def test_one_version_string_for_the_whole_project(nomogram_models):
         f"changelog says {latest.group(1)} but the code says "
         f"{nomogram_models.APP_VERSION}"
     )
+
+
+def test_every_command_line_option_is_actually_read():
+    """A declared-but-unused flag is a silent lie to the operator.
+
+    ``--jia-allometric`` survived the removal of the paediatric machinery: it
+    was still accepted, still documented in the usage block, and did nothing.
+    Someone asking for allometric scaling would have got the unscaled analysis
+    and no warning -- the same failure mode as the k = 0.007 fallback. This
+    asserts that every option the parser declares is referenced somewhere in
+    the module that declares it.
+    """
+    import re
+    from pathlib import Path
+
+    source = Path(__file__).resolve().parents[1] / "run_analysis.py"
+    text = source.read_text()
+
+    declared = {m.group(1).lstrip("-").replace("-", "_")
+                for m in re.finditer(r'add_argument\(\s*"(--[a-z0-9-]+)"', text)}
+    assert declared, "parser options not found -- has the parser been rewritten?"
+
+    unread = [d for d in sorted(declared)
+              if not re.search(r'\b(?:args|a)\.' + d + r'\b', text)
+              and f'"{d}"' not in text]
+    assert not unread, f"declared but never read: {', '.join(unread)}"

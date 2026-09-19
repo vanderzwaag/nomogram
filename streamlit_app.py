@@ -408,19 +408,22 @@ def jia_ode_model(y, t, Cl, Vc, Vp, Q):
 @st.cache_data(show_spinner=False)
 def get_jia_cri(initial_bolus, additional_boluses, patient_weight,
                 n_pat=250, seed=DEFAULT_SEED):
-    """Interindividual-variability band for the paediatric Jia model.
+    """Interindividual-variability band for the Jia model.
 
-    RESOLVED DISCREPANCY (EB-6): the submitted version's docstring gave the
-    variability as CL 0.176, Vc 0.114, Q 0.0573, Vp 0.111 while its code used
+    RESOLVED (EB-6): the submitted version's docstring gave the variability as
+    CL 0.176, Vc 0.114, Q 0.0573, Vp 0.111 while its code used
     [0.073, 0.081, 0.144, 0.318] -- different numbers in a different order --
     and additionally took their square root, so it treated them as variances
-    where the other two models treated theirs as standard deviations. The values
-    are now read from MODEL_PARAMETERS (the docstring set, as omega SDs, for
-    consistency with the other models) and are flagged UNVERIFIED there until
-    checked against the source publication.
+    where the other two models treated theirs as standard deviations. Both sets
+    were wrong. The values are now read from MODEL_PARAMETERS, where they have
+    been checked against the source table and converted from the published
+    omega-squared column: Cl 0.3493, Vc 0.3240, Q 0.3127, and Vp fixed at zero
+    as the source fixes it. They are omega SDs, as for the other two models, so
+    no square root is taken here.
 
-    Note also that the Jia implementation carries no weight covariate, so this
-    band is identical for a 3 kg neonate and a 70 kg adult (EB-4).
+    Jia is an ADULT model (EB-4) and carries no weight covariate, so this band
+    is identical at every body weight -- IBW scales the administered bolus but
+    never the elimination.
     """
     rng = np.random.default_rng(seed)
     # 1. Population Means (mL and mL/min)

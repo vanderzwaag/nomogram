@@ -8,7 +8,7 @@ command:
 ```bash
 pip install -r requirements.txt          # pure Python; no system packages needed
 python run_analysis.py --seed 20260912 --outdir outputs/frozen
-python -m pytest tests/ -q               # 162 checks, including implementation verification
+python -m pytest tests/ -q               # 163 checks, including implementation verification
 ```
 
 `outputs/frozen/summary.md` holds the values to quote; `outputs/frozen/manifest.json`
@@ -58,11 +58,13 @@ These are code defects, not wording problems, and each one changes numbers:
    docstring gave CL 0.176 / Vc 0.114 / Q 0.0573 / Vp 0.111; the code used
    `[0.073, 0.081, 0.144, 0.318]` in a different order, and took their square
    root, so it treated them as variances where the other two models treated
-   theirs as standard deviations. **Still unverified — check against the source.**
-7. **Jia has no weight covariate,** so a 3 kg neonate and a 70 kg adult were given
-   identical kinetics. A paediatric parameter space is only meaningful once this
-   is settled; `--jia-allometric` applies conventional exponents (1.0 volumes,
-   0.75 clearances) which are *not* from the source publication.
+   theirs as standard deviations. Both sets were wrong; see 13 below for what
+   the source actually publishes and what the code now holds. **Resolved.**
+7. **Jia has no weight covariate,** so a 3 kg neonate and a 70 kg adult were
+   given identical kinetics. That looked like a defect only while the model was
+   believed to be paediatric; it is a faithful implementation of an adult model
+   with no covariate. See 15. **Resolved** — IBW scales the administered bolus
+   but never the elimination, and that is now stated where it matters.
 8. **Two spellings of the Lanoiselée Q parameter** (4.7928 in the endpoint model,
    287.57/60 = 4.79283 in the credible-interval simulation). Worth about 0.02 IU;
    documented and unified.
@@ -218,7 +220,7 @@ evidence travel together.
 | `Nomogram_Models.py` | Dashboard-facing wrappers, PDF generation, figures. |
 | `streamlit_app.py` | The dashboard. |
 | `nomogram_render.py` | Nomogram geometry and rendering. Shared by the printed PDF and the interactive chart. No PyNomo, PyX, LaTeX or Ghostscript. |
-| `tests/` | 162 checks. |
+| `tests/` | 163 checks. |
 
 ## Author decisions still open
 

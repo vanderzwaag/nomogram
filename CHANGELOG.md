@@ -168,7 +168,7 @@ comment identifiers (EB-1…EB-8, R1, R2) are given where a change answers one.
   now rebuilt from the same seeded test cohort as the agreement table and
   therefore cannot quote different numbers from the text. PDF timestamps are
   suppressed so re-running reproduces the figures byte-for-byte.
-- **162 automated tests**, including an end-to-end execution of the dashboard
+- **163 automated tests**, including an end-to-end execution of the dashboard
   against a recording Streamlit stub.
 - **New modules:** `nomogram_core`, `calibration`, `agreement`,
   `parameter_spaces`, `topup`, `benchmarks`, `nomogram_render`.

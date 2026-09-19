@@ -18,7 +18,6 @@ defensible default, and each recorded in the manifest:
   --prime-timing      lumped_t0 (default) | cpb_onset          [EB-5]
   --threshold-iu      1000 (default: one 10 mg protamine increment)  [EB-3]
   --allow-iiv-proxy   substitute IIV where no %RSE is published  [EB-2]
-  --jia-allometric    apply conventional allometric scaling to Jia  [EB-4]
 """
 
 from __future__ import annotations
@@ -812,8 +811,6 @@ def build_parser() -> argparse.ArgumentParser:
                         "needed: all three population models now carry published "
                         "%%RSE or bootstrap intervals. Overstates parameter "
                         "uncertainty and is recorded as such.")
-    p.add_argument("--jia-allometric", action="store_true",
-                   help="apply conventional allometric scaling to Jia (EB-4)")
     p.add_argument("--primary-model", default="lanoiselee", choices=list(core.MODEL_NAMES))
     p.add_argument("--n-sim", type=int, default=1000, help="patients per calibration")
     p.add_argument("--n-test", type=int, default=1000, help="patients in the test cohort")
