@@ -214,6 +214,7 @@ evidence travel together.
 | `parameter_spaces.py` | Canonical cohorts, adult and paediatric grids, boundary corners, shifted institutions. |
 | `topup.py` | Supplemental-bolus grid with worst-case reporting. |
 | `benchmarks.py` | Implementation verification and the per-source benchmark table. |
+| `k_table_io.py` | Reads and writes the decay-constant lookup tables as CSV with a JSON provenance header. No pickles: unpickling a file shipped in a repository executes whatever is in it. |
 | `run_analysis.py` | The single command above. |
 | `Nomogram_Models.py` | Dashboard-facing wrappers, PDF generation, figures. |
 | `streamlit_app.py` | The dashboard. |

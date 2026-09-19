@@ -2,7 +2,6 @@ import hashlib
 import numpy as np
 import matplotlib.pyplot as plt
 import streamlit as st
-import pickle
 import itertools
 import pandas as pd
 
@@ -179,6 +178,7 @@ def summarize_k_distribution(k_values):
 # matplotlib chart from a different one -- the same "several constants in
 # circulation" defect that EB-3 was about, surviving in the drawing layer.
 
+from k_table_io import table_path, write_k_table               # noqa: E402
 from nomogram_render import (                                   # noqa: E402,F401
     NomogramGeometry,   # re-exported for callers of this module
     build_geometry,
@@ -626,7 +626,7 @@ def generate_v2_table_deterministic(seed=DEFAULT_SEED, n_sim=200,
             "model": model, "population": population, "seed": seed,
             "n_sim": n_sim, "grid": g, "evaluation_mode": evaluation_mode,
             "prime_timing": prime_timing, "app_version": APP_VERSION,
-            "k_search_bounds": K_BOUNDS,
+            "k_search_bounds": list(K_BOUNDS),
             "lo_hi_meaning": "k recalibrated at time on CPB -/+ 2 SD; a scenario "
                              "range, not an uncertainty interval",
         }}
@@ -655,9 +655,7 @@ def generate_v2_table_deterministic(seed=DEFAULT_SEED, n_sim=200,
             if i % 100 == 0:
                 main_prog.progress((m_i + (i + 1) / len(combos)) / len(MODEL_NAMES))
 
-        filename = f"k_table_v2_{model}.pkl"
-        with open(filename, "wb") as f:
-            pickle.dump(k_table, f)
+        filename = write_k_table(k_table, table_path(model))
         st.success(f"Saved {filename} ({len(combos)} nodes, {population} grid)")
 
     main_prog.empty()

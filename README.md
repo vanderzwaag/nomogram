@@ -119,6 +119,7 @@ are recorded per model in `nomogram_core.MODEL_PARAMETERS`.
 | `topup.py` | Supplemental-bolus grid with worst-case reporting. |
 | `benchmarks.py` | Implementation verification and reproduction of published values. |
 | `nomogram_render.py` | Nomogram geometry and rendering, shared by the printed PDF and the interactive chart. |
+| `k_table_io.py` | Reads and writes the decay-constant lookup tables as CSV with a JSON provenance header. No pickles: unpickling a file shipped in a repository executes whatever is in it. |
 | `run_analysis.py` | Regenerates every reported number from one seeded command. |
 | `make_supplementary_figures.py` | Main-text Figure 2 and supplementary figures S1–S4. |
 | `Nomogram_Models.py` | Dashboard-facing wrappers and figures. |

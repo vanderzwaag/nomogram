@@ -3,7 +3,6 @@ from scipy.integrate import odeint
 import streamlit as st
 import matplotlib.pyplot as plt
 import math
-import pickle
 import pandas as pd
 
 from calibration import parameter_uncertainty, summarise_k
@@ -28,6 +27,7 @@ from nomogram_core import (
     reference_amount,
     reference_amount_with_topups,
 )
+from k_table_io import read_k_table, table_path
 from nomogram_render import draw_nomogram
 from agreement import SIGN_CONVENTION_LABEL, difference
 from parameter_spaces import ADULT_GRID, describe_grids
@@ -93,18 +93,12 @@ prime_grid = ADULT_GRID["prime"]
 def load_k_table(model_name):
     """Load the pre-computed k lookup table for one reference model.
 
-    Tables written by the current generator carry a `__metadata__` entry
-    recording the seed, the grid, the sample size and the calibration
-    conventions used to build them. A table without that entry was produced by
-    the unseeded pipeline and cannot be reproduced, so it must not be used for
-    anything quoted in the manuscript (EB-6).
+    Tables carry a `__metadata__` entry recording the seed, the grid, the
+    sample size and the calibration conventions used to build them. A table
+    without that entry cannot be reproduced and must not be used for anything
+    quoted in the manuscript (EB-6).
     """
-    filename = f"k_table_v2_{canonical_model_name(model_name)}.pkl"
-    try:
-        with open(filename, "rb") as f:
-            return pickle.load(f)
-    except FileNotFoundError:
-        return None
+    return read_k_table(table_path(canonical_model_name(model_name)))
 
 
 def table_metadata(table):
@@ -128,7 +122,7 @@ def get_k_stats(hpkg, ibw_val, tto, ton, prime_val, table, model_name=None):
     if table is None:
         st.error(
             f"No lookup table found for {model_name or 'this model'} "
-            f"(expected k_table_v2_{canonical_model_name(model_name or 'lanoiselee')}.pkl). "
+            f"(expected {table_path(canonical_model_name(model_name or 'lanoiselee'))}). "
             "Use 'Regenerate Lookup Tables' in the sidebar. No default decay "
             "constant is substituted: a wrong k would propagate silently into "
             "every figure on this page."
