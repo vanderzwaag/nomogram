@@ -1,0 +1,15 @@
+# Tool configuration only. This project is a set of scripts run from the
+# repository root, not an installable package, so there is deliberately no
+# [project] or [build-system] table here.
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = [
+    # Surface warnings from this project's own code; a DeprecationWarning here
+    # is usually the first sign that a numpy or pandas change has moved a
+    # result.
+    "error::DeprecationWarning:nomogram_core",
+    "error::DeprecationWarning:calibration",
+    "error::DeprecationWarning:agreement",
+]

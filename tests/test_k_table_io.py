@@ -24,7 +24,7 @@ def test_round_trip_is_exact(tmp_path):
     bit-for-bit. Anything less and the shipped k would drift from the
     calibrated one every time the tables were rewritten."""
     original = _sample_table()
-    path = tmp_path / io.table_path("lanoiselee")
+    path = tmp_path / "k_table_v2_lanoiselee.csv"
     io.write_k_table(original, str(path))
     back = io.read_k_table(str(path))
 
@@ -39,7 +39,7 @@ def test_round_trip_is_exact(tmp_path):
 
 def test_grid_coordinates_stay_integers(tmp_path):
     """The keys are looked up exactly, so 40 must not come back as 40.0."""
-    path = tmp_path / io.table_path("m")
+    path = tmp_path / "k_table_v2_m.csv"
     io.write_k_table(_sample_table(), str(path))
     for key in io.read_k_table(str(path)):
         if key != io.METADATA_KEY:
@@ -50,12 +50,19 @@ def test_missing_table_reads_as_none(tmp_path):
     assert io.read_k_table(str(tmp_path / "absent.csv")) is None
 
 
+def test_tables_resolve_from_any_working_directory(tmp_path, monkeypatch):
+    """The dashboard is launched from wherever the user happens to be; a
+    relative path meant it silently found no table and fell back."""
+    monkeypatch.chdir(tmp_path)
+    assert io.read_k_table(io.table_path("lanoiselee")) is not None
+
+
 def test_shipped_tables_are_csv_with_metadata():
     """Every shipped table is readable, carries its provenance, and covers the
     whole grid its metadata declares."""
-    tables = sorted(Path(".").glob("k_table_v2_*.csv"))
+    tables = io.shipped_tables()
     assert tables, "no lookup tables are shipped"
-    assert not list(Path(".").glob("k_table_v2_*.pkl")), (
+    assert not list(io.TABLE_DIR.parent.rglob("*.pkl")), (
         "a pickled lookup table is back; unpickling executes arbitrary code"
     )
 
@@ -86,3 +93,32 @@ def test_no_module_imports_pickle():
                 f"{module.name} imports pickle; unpickling a file shipped in "
                 "the repository executes whatever is in it"
             )
+
+
+def test_shipped_tables_are_never_written_by_the_suite():
+    """A guard against the mistake that prompted it.
+
+    ``table_path`` returns an absolute path, and ``tmp_path / "/abs/path"``
+    discards tmp_path and yields the absolute one -- so a test that wrote to
+    ``tmp_path / io.table_path(model)`` silently overwrote the shipped table
+    with its two-row fixture. The suite is not allowed to touch these files, so
+    their digests must be the same before and after a full run.
+    """
+    import hashlib
+    import subprocess
+    import sys
+
+    def digests():
+        return {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
+                for p in io.shipped_tables()}
+
+    before = digests()
+    assert before, "no lookup tables are shipped"
+    subprocess.run([sys.executable, "-m", "pytest", "tests/test_k_table_io.py",
+                    "-q", "-p", "no:cacheprovider",
+                    "--deselect",
+                    "tests/test_k_table_io.py::test_shipped_tables_are_never_written_by_the_suite"],
+                   capture_output=True, check=False)
+    assert digests() == before, (
+        "running the suite modified a shipped lookup table"
+    )

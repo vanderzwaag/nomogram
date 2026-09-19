@@ -7,7 +7,7 @@ file every user of a clone or fork must trust; a lookup table has no need of
 that. CSV is also diffable, so a change to a table shows up in review, and it
 opens in any spreadsheet for inspection.
 
-File layout::
+Tables live in ``data/k_tables/``, one CSV per model::
 
     # Decay-constant lookup table. Do not edit by hand.
     # metadata: {"model": "lanoiselee", "seed": 20260912, ...}
@@ -31,6 +31,11 @@ import json
 from pathlib import Path
 from typing import Dict
 
+# Anchored to this file rather than the working directory, so the dashboard
+# finds its tables whatever directory it is launched from. Relative paths meant
+# starting Streamlit from anywhere else silently found no table at all.
+TABLE_DIR = Path(__file__).resolve().parent / "data" / "k_tables"
+
 METADATA_KEY = "__metadata__"
 KEY_FIELDS = ("dose_per_kg", "ibw", "time_to_cpb", "time_on_cpb", "prime")
 VALUE_FIELDS = ("mu", "lo", "hi")
@@ -39,8 +44,13 @@ _META_PREFIX = "# metadata: "
 
 
 def table_path(model: str) -> str:
-    """Filename for one model's table. ASCII, so accented names still resolve."""
-    return f"k_table_v2_{model}.csv"
+    """Path to one model's table. ASCII filename, so accented names resolve."""
+    return str(TABLE_DIR / f"k_table_v2_{model}.csv")
+
+
+def shipped_tables() -> list:
+    """Every lookup table in the repository, sorted by filename."""
+    return sorted(TABLE_DIR.glob("k_table_v2_*.csv"))
 
 
 def _number(text: str):
@@ -58,6 +68,7 @@ def write_k_table(table: Dict, path: str) -> str:
     meta = table.get(METADATA_KEY, {})
     rows = sorted(k for k in table if k != METADATA_KEY)
 
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", newline="", encoding="utf-8") as fh:
         fh.write(_HEADER + "\n")
         fh.write(_META_PREFIX + json.dumps(meta, sort_keys=True, default=str) + "\n")

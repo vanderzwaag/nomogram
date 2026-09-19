@@ -110,6 +110,14 @@ are recorded per model in `nomogram_core.MODEL_PARAMETERS`.
 
 ## Layout
 
+```
+├── data/k_tables/     calibrated k per grid node, one CSV per model
+├── outputs/frozen/    the archived run: tables, figures, manifest, summary
+├── tests/             the test suite
+└── *.py               the pipeline; entry points are run_analysis.py,
+                       make_supplementary_figures.py and streamlit_app.py
+```
+
 | File | Role |
 |---|---|
 | `nomogram_core.py` | The six models, trajectory and endpoint forms, and the simplified model. No Streamlit or plotting imports, so it runs in CI. |
@@ -119,7 +127,7 @@ are recorded per model in `nomogram_core.MODEL_PARAMETERS`.
 | `topup.py` | Supplemental-bolus grid with worst-case reporting. |
 | `benchmarks.py` | Implementation verification and reproduction of published values. |
 | `nomogram_render.py` | Nomogram geometry and rendering, shared by the printed PDF and the interactive chart. |
-| `k_table_io.py` | Reads and writes the decay-constant lookup tables as CSV with a JSON provenance header. No pickles: unpickling a file shipped in a repository executes whatever is in it. |
+| `k_table_io.py` | Reads and writes `data/k_tables/*.csv`, the decay-constant lookup tables, each with a JSON provenance header. No pickles: unpickling a file shipped in a repository executes whatever is in it. |
 | `run_analysis.py` | Regenerates every reported number from one seeded command. |
 | `make_supplementary_figures.py` | Main-text Figure 2 and supplementary figures S1–S4. |
 | `Nomogram_Models.py` | Dashboard-facing wrappers and figures. |

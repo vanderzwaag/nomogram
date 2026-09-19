@@ -182,14 +182,16 @@ comment identifiers (EB-1…EB-8, R1, R2) are given where a change answers one.
 - **New modules:** `nomogram_core`, `calibration`, `agreement`,
   `parameter_spaces`, `topup`, `benchmarks`, `nomogram_render`.
 - **`REPRODUCIBILITY.md`**, `LICENSE` (MIT), `CITATION.cff` and this changelog.
-- **The lookup tables ship as CSV, not pickles.** `pickle.load` executes
+- **The lookup tables move to `data/k_tables/` and ship as CSV, not pickles.** `pickle.load` executes
   arbitrary code, so a pickled table in a public repository is a file every
   user of a clone or fork has to trust, for data that is 2,304 rows of five
   integers and three floats. Each table is now CSV with a commented JSON header
   carrying its provenance, readable in any spreadsheet and diffable in review.
   Floats are written with `repr`, which round-trips exactly in Python: the
   converted tables hold values bit-identical to the pickles they replace, and a
-  test asserts the round trip. `k_table_io.py` is the single reader and writer.
+  test asserts the round trip. `k_table_io.py` is the single reader and writer,
+  and resolves the directory from its own location, so the dashboard finds its
+  tables whatever directory it is launched from.
 - **`requirements-frozen.txt`** pinning the exact package versions the archived
   run used, so the published numbers can be reproduced to the last digit.
   `requirements.txt` installs current releases and no longer pulls in Streamlit:
