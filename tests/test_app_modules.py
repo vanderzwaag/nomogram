@@ -23,7 +23,7 @@ def _stub(name, **attrs):
 
 @pytest.fixture(scope="module")
 def nomogram_models():
-    """Import Nomogram_Models with the presentation-layer dependencies stubbed."""
+    """Import nomogram_models with the presentation-layer dependencies stubbed."""
 
     def passthrough_decorator(*dargs, **dkwargs):
         def wrap(fn):
@@ -46,9 +46,9 @@ def nomogram_models():
     import matplotlib
     matplotlib.use("Agg")
 
-    import Nomogram_Models
+    import nomogram_models
     assert st is sys.modules["streamlit"]
-    return Nomogram_Models
+    return nomogram_models
 
 
 def test_module_imports_and_reexports_the_public_api(nomogram_models):

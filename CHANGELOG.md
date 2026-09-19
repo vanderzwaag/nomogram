@@ -21,6 +21,15 @@ comment identifiers (EB-1…EB-8, R1, R2) are given where a change answers one.
 
 ### Fixed — defects that changed reported numbers
 
+- **A table the pipeline no longer produces was still in the frozen archive.**
+  `00_verification_source.csv` dated from the first version of the runner, when
+  the benchmark table was a placeholder; five of its six rows read "PENDING -
+  expected value not yet transcribed from source" and its expected column was
+  empty. It was superseded by `00_source_printed_value_checks.csv` and should
+  have gone with it, but the runner writes into the output directory without
+  clearing it, so the obsolete file persisted. The manifest now records which
+  CSVs a run wrote, and the runner warns about any others it finds.
+
 - **No random seed anywhere (EB-3, R1 Figure 2).** Nine calls to the global
   `np.random` ran unseeded, so every execution drew a different synthetic
   cohort and produced different constants and statistics. Because the
@@ -89,7 +98,7 @@ comment identifiers (EB-1…EB-8, R1, R2) are given where a change answers one.
   Unified on the unpublished-rounding value; worth about 0.02 IU at the
   reversal timepoint.
 - **Model equations were duplicated** between `streamlit_app.py` (trajectory)
-  and `Nomogram_Models.py` (endpoint). Both now come from `nomogram_core`, and
+  and `nomogram_models.py` (endpoint). Both now come from `nomogram_core`, and
   a test asserts they agree at the reversal timepoint.
 
 ### Changed — breaking
@@ -124,6 +133,11 @@ comment identifiers (EB-1…EB-8, R1, R2) are given where a change answers one.
   silently. Only active models get one: the table for the withheld PRODOSE-2 is
   no longer shipped, since the generator cannot rebuild a table for a model the
   pipeline does not offer.
+- **`Nomogram_Models.py` is renamed `nomogram_models.py`.** Module names are
+  lowercase by convention (PEP 8), and a capitalised one is a filename that
+  differs only in case from its own package style -- a hazard on
+  case-insensitive filesystems. `import Nomogram_Models` becomes
+  `import nomogram_models`.
 - **API:** `bootstrap_k_distribution` renamed to `monte_carlo_k_distribution`
   (no dataset is resampled; the old name is aliased). `find_best_k`,
   `sensitivity_analysis` and `run_nomogram` now take a `seed`.
@@ -192,6 +206,10 @@ comment identifiers (EB-1…EB-8, R1, R2) are given where a change answers one.
   test asserts the round trip. `k_table_io.py` is the single reader and writer,
   and resolves the directory from its own location, so the dashboard finds its
   tables whatever directory it is launched from.
+- **Continuous integration** on every push: the suite on Python 3.10 and 3.11,
+  every test file again in isolation, and a check that `run_analysis.py`
+  regenerates each frozen CSV byte-for-byte from a clean checkout. The
+  reproducibility claim is now asserted rather than asserted about.
 - **`requirements-frozen.txt`** pinning the exact package versions the archived
   run used, so the published numbers can be reproduced to the last digit.
   `requirements.txt` installs current releases and no longer pulls in Streamlit:

@@ -12,6 +12,7 @@ Supporting code for manuscript **JCVA-D-26-01511**. Every number the manuscript
 reports regenerates from one seeded command at a tagged commit.
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22846043.svg)](https://doi.org/10.5281/zenodo.22846043)
+[![tests](https://github.com/vanderzwaag/nomogram/actions/workflows/tests.yml/badge.svg)](https://github.com/vanderzwaag/nomogram/actions/workflows/tests.yml)
 
 ---
 
@@ -111,6 +112,8 @@ are recorded per model in `nomogram_core.MODEL_PARAMETERS`.
 ## Layout
 
 ```
+├── .github/workflows/ CI: the suite, each test file alone, and a check that
+│                      the frozen run still regenerates byte-for-byte
 ├── data/k_tables/     calibrated k per grid node, one CSV per model
 ├── outputs/frozen/    the archived run: tables, figures, manifest, summary
 ├── tests/             the test suite
@@ -130,7 +133,7 @@ are recorded per model in `nomogram_core.MODEL_PARAMETERS`.
 | `k_table_io.py` | Reads and writes `data/k_tables/*.csv`, the decay-constant lookup tables, each with a JSON provenance header. No pickles: unpickling a file shipped in a repository executes whatever is in it. |
 | `run_analysis.py` | Regenerates every reported number from one seeded command. |
 | `make_supplementary_figures.py` | Main-text Figure 2 and supplementary figures S1–S4. |
-| `Nomogram_Models.py` | Dashboard-facing wrappers and figures. |
+| `nomogram_models.py` | Dashboard-facing wrappers and figures. |
 | `streamlit_app.py` | The dashboard. |
 | `tests/` | The test suite. |
 

@@ -1,6 +1,0 @@
-model,description,citation,units,expected,observed,tolerance_pct,status,pct_error
-lanoiselee,Central-compartment amount 60 min after a 300 IU/kg bolus in a 70 kg adult,Lanoiselee et al. Br J Anaesth 2026;136(3):847-855,IU,,13551.46760980046,10.0,PENDING - expected value not yet transcribed from source,
-delavenne,Central-compartment amount 60 min after a 300 IU/kg bolus in a 70 kg adult,Delavenne et al.,IU,,10044.262959183117,10.0,PENDING - expected value not yet transcribed from source,
-jia,Central-compartment amount 60 min after a 400 IU/kg bolus in a 10 kg child,Jia et al.,IU,,2566.597672394958,10.0,PENDING - expected value not yet transcribed from source,
-prodose,Residual heparin for the worked example in the PRODOSE publication,PRODOSE,IU,,21868.853543433015,10.0,PENDING - expected value not yet transcribed from source,
-meesters,Residual heparin for the worked example in the Meesters publication,Meesters et al.,IU,,24719.02534764714,10.0,PENDING - expected value not yet transcribed from source,

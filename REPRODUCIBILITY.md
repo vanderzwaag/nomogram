@@ -72,7 +72,7 @@ inconsistencies arose:
 9. **The "bootstrap" resamples nothing** and the "posterior" has no prior. Both
    are Monte Carlo replicate simulations; renamed, with the old names aliased.
 10. **Duplicated model equations.** The trajectory was implemented in
-    `streamlit_app.py` and the endpoint in `Nomogram_Models.py`. Both now come
+    `streamlit_app.py` and the endpoint in `nomogram_models.py`. Both now come
     from `nomogram_core`, and a test asserts they agree at the reversal timepoint.
 
 ### Found by checking the code against the source parameter tables
@@ -216,7 +216,7 @@ evidence travel together.
 | `benchmarks.py` | Implementation verification and the per-source benchmark table. |
 | `k_table_io.py` | Reads and writes `data/k_tables/*.csv`, the decay-constant lookup tables, each with a JSON provenance header. No pickles. |
 | `run_analysis.py` | The single command above. |
-| `Nomogram_Models.py` | Dashboard-facing wrappers, PDF generation, figures. |
+| `nomogram_models.py` | Dashboard-facing wrappers, PDF generation, figures. |
 | `streamlit_app.py` | The dashboard. |
 | `nomogram_render.py` | Nomogram geometry and rendering. Shared by the printed PDF and the interactive chart. No PyNomo, PyX, LaTeX or Ghostscript. |
 | `tests/` | The test suite. |

@@ -6,7 +6,7 @@ import math
 import pandas as pd
 
 from calibration import parameter_uncertainty, summarise_k
-from Nomogram_Models import (
+from nomogram_models import (
     DEFAULT_SEED,
     _spec,
     nomogram_geometry_for,
@@ -57,7 +57,7 @@ Anyone using this tool outside the intended purpose stated above does so on thei
 st.set_page_config(layout="wide", page_title="Heparin Decay Dashboard")
 
 # Model identity comes from one registry, so a label cannot drift from the
-# spelling the reports and figures use. The version comes from Nomogram_Models.
+# spelling the reports and figures use. The version comes from nomogram_models.
 MODEL_KEYS = list(MODEL_NAMES)
 # The three population-PK models, the only ones with published variability.
 CRI_MODELS_ALL = ("lanoiselee", "delavenne", "jia")

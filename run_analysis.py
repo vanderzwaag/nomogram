@@ -109,8 +109,11 @@ def run(args) -> Path:
         prime_timing=args.prime_timing,
     )
 
+    written: list = []
+
     def write(name: str, df: pd.DataFrame) -> None:
         df.to_csv(outdir / name, index=False)
+        written.append(name)
         print(f"  wrote {name} ({len(df)} rows)")
 
     print(f"Seed {seed} | cohort '{args.cohort}' ({spec.describe()})")
@@ -511,10 +514,23 @@ def run(args) -> Path:
             for key, p in core.MODEL_PARAMETERS.items()
         },
         "calibration_grids": {"adult": ps.ADULT_GRID},
+        "csv_outputs": sorted(written),
         "outstanding_author_decisions": _outstanding(args),
     }
     (outdir / "manifest.json").write_text(json.dumps(manifest, indent=2, default=str))
     print("\n  wrote manifest.json")
+
+    # Writing into an existing directory leaves behind anything the pipeline
+    # used to produce and no longer does; one such table shipped in the frozen
+    # archive for weeks, still full of PENDING rows. Flag rather than delete:
+    # removing files from a directory the user named is not this script's call.
+    stale = sorted({p.name for p in outdir.glob("*.csv")} - set(written))
+    if stale:
+        print("\n  WARNING: files in the output directory that this run did not "
+              "write.\n  They are not part of the analysis and should be deleted "
+              "before the\n  directory is archived or quoted:")
+        for name in stale:
+            print(f"    {name}")
 
     _write_summary(outdir, args, spec, k_table, agr, obj, sens, modes, ptim,
                    pu, coverage, inst, ws, ex, manifest, internal)
