@@ -159,6 +159,26 @@ def test_run_nomogram_end_to_end(nomogram_models, tmp_path, monkeypatch):
     assert (loa_low, loa_high) == pytest.approx(
         (metadata["agreement"]["loa_low"], metadata["agreement"]["loa_high"]))
 
+    # The on-screen chart is drawn from the geometry the PDF was rendered from,
+    # so the dashboard cannot show a chart the printed one disagrees with.
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from nomogram_render import draw_nomogram
+
+    geom = metadata["geometry"]
+    assert geom.k == pytest.approx(k_best), (
+        "the chart offered on screen uses a different constant from the PDF"
+    )
+    example = metadata["worked_example"]
+    assert example["total"] == pytest.approx(400 * 70 + 5000)
+    assert example["elapsed"] == pytest.approx(15 + 60)
+
+    fig, ax = plt.subplots()
+    draw_nomogram(geom, ax=ax, patient=example)
+    assert ax.lines, "the straightedge was not drawn"
+    plt.close(fig)
+
     # The exported cohort carries the difference under the stated convention.
     assert "Diff_Ref_minus_Simp" in sim_df
     assert np.allclose(sim_df["Diff_Ref_minus_Simp"],

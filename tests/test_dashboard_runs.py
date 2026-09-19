@@ -214,3 +214,23 @@ def test_dashboard_surfaces_parameter_uncertainty():
     src = open("streamlit_app.py", encoding="utf-8").read()
     assert "parameter_uncertainty(" in src
     assert "Parameter uncertainty" in src
+
+
+def test_no_bundled_screenshot_of_the_nomogram():
+    """The Nomogram tab showed a static Figure.png of a chart with a
+    straightedge on it. A screenshot cannot follow the model, the decay
+    constant or the dose range the user selected, so it was guaranteed to
+    disagree with the PDF generated beside it. The chart is now drawn from the
+    geometry object the PDF itself was rendered from.
+    """
+    from pathlib import Path
+
+    src = Path("streamlit_app.py").read_text(encoding="utf-8")
+    assert "st.image(" not in src, (
+        "the dashboard bundles a static image again; draw the chart instead"
+    )
+    assert not Path("Figure.png").exists(), "the screenshot is back in the repo"
+    assert 'metadata["geometry"]' in src, (
+        "the on-screen chart must come from the geometry the PDF was rendered "
+        "from, not from one rebuilt in the dashboard"
+    )

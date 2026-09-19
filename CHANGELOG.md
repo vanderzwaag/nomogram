@@ -70,6 +70,13 @@ comment identifiers (EB-1…EB-8, R1, R2) are given where a change answers one.
   to a hard-coded `k = 0.007` with no warning; the calibrated value is about
   0.0042, a 67% error in the decay constant, invisible to the user. The silent
   fallback is gone.
+- **The Nomogram tab showed a bundled screenshot.** `Figure.png` was a static
+  picture of a chart with a straightedge drawn on it, displayed beside the PDF
+  the user had just generated. It could not follow the reference model, the
+  calibrated constant or the dose range they had selected, so it was guaranteed
+  to disagree with the chart next to it. The tab now draws the geometry object
+  the PDF was rendered from, with the straightedge placed at the cohort
+  entered; the image is removed from the repository.
 - **Two independent nomogram implementations fed by two different constants.**
   The printed PDF was drawn by PyNomo from the replicate mean; the on-screen
   chart was a separate matplotlib implementation reading `k_mu` from the lookup
@@ -168,7 +175,7 @@ comment identifiers (EB-1…EB-8, R1, R2) are given where a change answers one.
   now rebuilt from the same seeded test cohort as the agreement table and
   therefore cannot quote different numbers from the text. PDF timestamps are
   suppressed so re-running reproduces the figures byte-for-byte.
-- **163 automated tests**, including an end-to-end execution of the dashboard
+- **164 automated tests**, including an end-to-end execution of the dashboard
   against a recording Streamlit stub.
 - **New modules:** `nomogram_core`, `calibration`, `agreement`,
   `parameter_spaces`, `topup`, `benchmarks`, `nomogram_render`.

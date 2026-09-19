@@ -8,7 +8,7 @@ command:
 ```bash
 pip install -r requirements-frozen.txt   # the exact versions the run used
 python run_analysis.py --seed 20260912 --outdir outputs/frozen
-python -m pytest tests/ -q               # 163 checks, including implementation verification
+python -m pytest tests/ -q               # 164 checks, including implementation verification
 ```
 
 Pure Python; no system packages. `requirements.txt` installs current releases
@@ -217,7 +217,7 @@ evidence travel together.
 | `Nomogram_Models.py` | Dashboard-facing wrappers, PDF generation, figures. |
 | `streamlit_app.py` | The dashboard. |
 | `nomogram_render.py` | Nomogram geometry and rendering. Shared by the printed PDF and the interactive chart. No PyNomo, PyX, LaTeX or Ghostscript. |
-| `tests/` | 163 checks. |
+| `tests/` | 164 checks. |
 
 ## Author decisions — all settled
 

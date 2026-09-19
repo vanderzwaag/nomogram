@@ -569,6 +569,16 @@ def run_nomogram(initial_dose_per_kg, t_to_mean, prime_heparin,
         "threshold_iu": threshold_iu, "app_version": APP_VERSION,
         "variation": variation, "n_test": n_sim,
         "agreement": agreement, "strata": strata_df, "objectives": obj_df,
+        # The geometry object the PDF was rendered from, so the dashboard can
+        # draw the same chart on screen without rebuilding it. Rebuilding is
+        # how the screen and the print came to disagree in the first place.
+        "geometry": geom,
+        "worked_example": {
+            "total": initial_dose_per_kg * ibw_mean + prime_heparin,
+            "elapsed": t_to_mean + t_on_mean,
+            "label": f"{ibw_mean:g} kg, {initial_dose_per_kg:g} IU/kg "
+                     f"+ {prime_heparin:,.0f} IU prime",
+        },
     }
 
     return (pdf_path, k_best, bias, loa_low, loa_high, fig_ba, k_best, ci_low, ci_high,

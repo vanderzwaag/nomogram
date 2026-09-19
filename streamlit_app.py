@@ -995,21 +995,34 @@ with tab_diagnostics:
                     st.download_button("Download Nomogram PDF", f, file_name=f"nomogram_{display_name(model_choice)}.pdf")
                 
                 col1, col2 = st.columns(2)
-                
+
                 with col1:
                     st.markdown("""
                       ### How to Use the Nomogram
-                      
-                      1. Identify the **total heparin administered** (initial bolus + CPB prime).  
-                      2. Locate this value on the **left axis**.  
-                      3. Identify the **elapsed time** from heparin administration to protamine dosing (time to CPB + time on CPB).  
-                      4. Locate this value on the **middle axis**.  
-                      5. Use a straightedge to connect the two points.  
+
+                      1. Identify the **total heparin administered** (initial bolus + CPB prime).
+                      2. Locate this value on the **left axis**.
+                      3. Identify the **elapsed time** from heparin administration to protamine dosing (time to CPB + time on CPB).
+                      4. Locate this value on the **middle axis**.
+                      5. Use a straightedge to connect the two points.
                       6. The intersection with the **residual heparin axis** provides the estimated remaining heparin load.
                     """)
-                
+                    st.caption(
+                        "The chart beside this is the one in the PDF you just "
+                        "generated -- same geometry, same decay constant -- with "
+                        "the straightedge drawn for the cohort you entered.")
+
                 with col2:
-                    st.image("Figure.png")
+                    # Drawn from the geometry object the PDF was rendered from,
+                    # rather than a bundled screenshot that could not follow the
+                    # model, the constant or the dose range the user chose.
+                    fig_demo, ax_demo = plt.subplots(figsize=(6.2, 7.6))
+                    draw_nomogram(
+                        metadata["geometry"], ax=ax_demo,
+                        patient=metadata["worked_example"],
+                        title=f"{display_name(model_choice)}  ·  k = {k_best:.5f} /min",
+                    )
+                    st.pyplot(fig_demo)
 
             with sub[1]:
                 plot_col1, plot_col2 = st.columns(2)
