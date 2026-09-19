@@ -256,7 +256,7 @@ reader of the archive can see what was chosen without reading this file.
 - ~~**EB-6** — supply per-source benchmark values.~~ **Settled, and the limit is
   the publications, not the code.** See "What verification can and cannot show".
 - ~~**EB-4** — confirm the paediatric parameter space for Jia.~~ **Resolved:**
-  Jia is adult. The manuscript text needs correcting; no paediatric analysis is
+  Jia is adult, the manuscript text is corrected, and no paediatric analysis is
   required.
 - ~~**EB-3** — confirm the canonical cohort.~~ **Settled:** 400 IU/kg induction
   bolus, 70 kg ideal body weight, 15 min to CPB, 60 min on CPB, 5,000 IU prime —

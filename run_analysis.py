@@ -540,6 +540,14 @@ def run(args) -> Path:
 
 
 def _outstanding(args) -> list:
+    """Anything a run finds that the authors must act on before quoting it.
+
+    Both checks are guards rather than a standing to-do list: they fire only if
+    a published uncertainty goes missing or a source check starts failing. An
+    empty list is the normal state. Facts about the models themselves belong in
+    ``decisions``, which records what was settled, not in a list of things
+    outstanding.
+    """
     items = []
     missing = {k: list(p.missing_rse()) for k, p in core.MODEL_PARAMETERS.items()
                if p.missing_rse() and p.rse}
@@ -558,20 +566,6 @@ def _outstanding(args) -> list:
             "action": "A printed-value check against a source publication is failing",
             "detail": failed[["model", "description", "expected", "observed"]].to_dict("records"),
         })
-    items.append({
-        "comment": "EB-4 / R1 p11 L46",
-        "action": "Correct the manuscript's description of the Jia model",
-        "detail": ("Jia is an ADULT model derived in a relatively small-bodied "
-                   "population, not a paediatric one. Its Vc of 3.04 L is within "
-                   "2% of Delavenne's adult 3.1 L. The reviewers' request for a "
-                   "paediatric parameter space follows from the manuscript's own "
-                   "mis-description and is answered by correcting the text. The "
-                   "model carries no weight covariate, so it cannot be "
-                   "individualised by weight and the upper end of the adult "
-                   "calibration grid extrapolates beyond its derivation "
-                   "population; both are stated limitations. Transportability to "
-                   "a small-bodied adult population is evaluated explicitly."),
-    })
     return items
 
 
