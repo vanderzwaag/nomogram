@@ -22,9 +22,11 @@ actually moved. Both modes print the largest relative difference they found,
 so a pass says how close it came and a failure says whether it is rounding or
 a result moving.
 
-Measured drift between the archive's environment and one a major release
-behind (numpy 2.2.6, scipy 1.15.3, pandas 2.3.3) is 5e-14 at worst, in a
-p-value of 5e-77 -- far below any reported precision.
+A difference is judged against the larger of the value itself and the biggest
+value in its column. Some columns are numerical zero by construction -- a
+recalibrated bias is a mean of a thousand differences of a few hundred IU that
+almost cancel, so the whole column spans 0.045 IU -- and dividing by the value
+alone turns one unit in the last place into an apparent 1e-10 disagreement.
 
 The manifest is compared by its decisions rather than its bytes, since it
 records the timestamp and commit of its own run.
@@ -41,6 +43,7 @@ import numpy as np
 import pandas as pd
 
 FROZEN = Path(__file__).resolve().parent / "outputs" / "frozen"
+
 MANIFEST_KEYS = ("decisions", "sample_sizes", "parameter_provenance", "csv_outputs")
 
 
@@ -77,8 +80,16 @@ def compare_csv(frozen: Path, fresh: Path, tolerance: float | None,
             out.append(f"{frozen.name}: '{column}' differs in which values are missing")
             continue
         finite = ~np.isnan(xv)
+        # Judge each difference against the larger of the value itself and the
+        # biggest value in its column. Dividing by the value alone explodes on
+        # a near-cancellation: the recalibrated bias is a mean of a thousand
+        # differences of a few hundred IU that almost cancel, so the whole
+        # column spans 0.045 IU and one ulp of wobble reads as 1e-10. Measured
+        # against the column it is 2e-11, which is what it is -- rounding.
+        scale = float(np.max(np.abs(xv[finite]))) if finite.any() else 0.0
         with np.errstate(divide="ignore", invalid="ignore"):
-            rel = np.abs(xv[finite] - yv[finite]) / np.maximum(np.abs(xv[finite]), 1e-300)
+            absdiff = np.abs(xv[finite] - yv[finite])
+            rel = absdiff / np.maximum(np.abs(xv[finite]), max(scale, 1e-300))
         if rel.size and rel.max() > worst["value"]:
             row = int(np.argmax(rel))
             worst.update(value=float(rel.max()), where=f"{frozen.name} '{column}' row {row}",

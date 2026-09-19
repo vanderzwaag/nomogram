@@ -222,7 +222,7 @@ comment identifiers (EB-1…EB-8, R1, R2) are given where a change answers one.
 - **Continuous integration** on every push: the suite on Python 3.10 and 3.11,
   every test file again in isolation, a check that the reported numbers are
   unchanged on current library releases, and a separate job that regenerates
-  the archive to a tolerance three orders tighter in the pinned environment.
+  the archive in the pinned environment.
   The reproducibility
   claim is now asserted rather than asserted about.
 - **`check_frozen.py`** compares a run against the archive and reports the

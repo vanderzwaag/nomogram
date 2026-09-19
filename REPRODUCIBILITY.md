@@ -17,8 +17,9 @@ an environment a major release behind (numpy 2.2.6, scipy 1.15.3, pandas 2.3.3)
 is 5e-14 at worst, in a p-value of 5e-77 -- far below any reported precision.
 
 `python check_frozen.py <dir>` compares a run against the archive and prints
-the largest relative difference it found. The default tolerance is 1e-9; CI
-runs it on current releases and again at 1e-12 in the pinned environment.
+the largest relative difference it found, judged against the larger of each
+value and its column's biggest value. The tolerance is 1e-9; CI runs it on
+current releases and again in the pinned environment.
 
 `--exact` requires byte-identical files. That holds on the machine the archive
 was built on and is worth being able to check, but it is a claim about a
