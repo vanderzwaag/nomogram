@@ -1,7 +1,5 @@
 import hashlib
-import math
 import numpy as np
-from scipy.optimize import minimize_scalar
 import matplotlib.pyplot as plt
 import streamlit as st
 import pickle
@@ -10,11 +8,8 @@ import pandas as pd
 
 APP_VERSION = "v2.0.0"
 
-# Every simulation in this module now takes an explicit seed. The submitted
-# version called the global np.random with no seed anywhere, so no two runs
-# produced the same cohort, the same k or the same agreement statistics -- which
-# is the root cause of the numbers that did not reconcile between the
-# manuscript body, Table 1 and the Figure 2 legend (EB-3, R1 Figure 2).
+# Every simulation in this module takes an explicit seed; without one, no two
+# runs produce the same cohort, k or agreement statistics (EB-3, R1 Figure 2).
 DEFAULT_SEED = 20260912
 
 # ==========================================
@@ -146,13 +141,12 @@ def monte_carlo_k_distribution(initial_dose_per_kg, prime_heparin, ibw_mean, ibw
                                seed=DEFAULT_SEED, **kwargs):
     """Repeat the calibration on fresh cohorts from the SAME fixed distributions.
 
-    This was previously called `bootstrap_k_distribution`, which was a
-    misnomer: no dataset is resampled, a new synthetic cohort is simulated each
-    time. What it measures is Monte Carlo sampling precision, and that is how it
-    must be labelled wherever it appears (EB-2). It does not quantify
-    uncertainty in the published PK parameters, in the institutional input
-    estimates, in model selection, or in an individual patient's prediction --
-    for the first of those, see `parameter_uncertainty`.
+    Not a bootstrap: no dataset is resampled, a new synthetic cohort is
+    simulated each time. What it measures is Monte Carlo sampling precision,
+    and that is how it must be labelled wherever it appears (EB-2). It does not
+    quantify uncertainty in the published PK parameters, in the institutional
+    input estimates, in model selection, or in an individual patient's
+    prediction -- for the first of those, see `parameter_uncertainty`.
     """
     spec = _spec(initial_dose_per_kg, prime_heparin, ibw_mean, ibw_sd,
                  t_to_mean, t_to_sd, t_on_mean, t_on_sd)
@@ -185,10 +179,10 @@ def summarize_k_distribution(k_values):
 # matplotlib chart from a different one -- the same "several constants in
 # circulation" defect that EB-3 was about, surviving in the drawing layer.
 
-from nomogram_render import (                                   # noqa: E402
-    NomogramGeometry,
+from nomogram_render import (                                   # noqa: E402,F401
+    NomogramGeometry,   # re-exported for callers of this module
     build_geometry,
-    draw_nomogram,
+    draw_nomogram,      # re-exported
     footer_for,
     render_pdf,
 )
@@ -231,10 +225,8 @@ def build_nomogram(k_value, output_filename="heparin_dose_decay_nomogram.pdf",
 def bland_altman_plot(ref, test, model_label="Reference", threshold_iu=DEFAULT_THRESHOLD_IU):
     """Bland-Altman plot with the proportional-bias regression drawn on it (EB-3).
 
-    The axis label states the sign convention explicitly. The submitted figure
-    plotted the difference one way round while the manuscript body quoted it the
-    other, which is why the same analysis appeared as -5.5 IU in the text and
-    +5.62 IU in the legend.
+    The axis label states the sign convention explicitly, so the figure cannot
+    be read against the direction the text quotes.
     """
     ref = np.asarray(ref, dtype=float)
     test = np.asarray(test, dtype=float)
@@ -453,21 +445,16 @@ def run_nomogram(initial_dose_per_kg, t_to_mean, prime_heparin,
                  threshold_iu=DEFAULT_THRESHOLD_IU):
     """Full diagnostic run for one reference model.
 
-    Two defects in the submitted version are fixed here, both of which fed the
-    numerical inconsistencies the reviewers found (EB-3):
+    Two rules hold the numbers together (EB-3):
 
-    1. **One k, used everywhere.** The submitted code calibrated `k_best` on one
-       unseeded cohort, used it for the agreement statistics, then printed a
-       *different* constant (the replicate mean) on the PDF and in its footer --
-       while the dashboard's interactive nomogram read a *third* value from a
-       lookup table built at n_sim = 200. The reported constant is now the mean
-       over the replicate cohorts, and that single value is used for the
-       statistics, the plots, the PDF and the footer alike.
+    1. **One k, used everywhere.** The reported constant is the mean over the
+       replicate cohorts, and that single value is used for the statistics, the
+       plots, the PDF and its footer alike. Three constants in circulation for
+       one configuration is what made the reported numbers irreconcilable.
 
-    2. **One test cohort, drawn from a declared seed.** The submitted code drew a
-       fresh unseeded cohort for the diagnostics after calibrating on another
-       one, so the residual bias -- which the objective drives to nearly zero --
-       came out as a few IU with a sign that changed from run to run.
+    2. **One test cohort, drawn from a declared seed.** The objective drives the
+       residual bias to nearly zero, so an undeclared cohort leaves a bias of a
+       few IU whose sign changes from run to run.
     """
     spec = _spec(initial_dose_per_kg, prime_heparin, ibw_mean, ibw_sd,
                  t_to_mean, t_to_sd, t_on_mean, t_on_sd)
@@ -590,9 +577,9 @@ def run_nomogram(initial_dose_per_kg, t_to_mean, prime_heparin,
 # GRID GENERATION
 # ==========================================
 
-from parameter_spaces import (                                  # noqa: E402
+from parameter_spaces import (                                  # noqa: E402,F401
     ADULT_GRID,
-    CANONICAL_COHORTS,
+    CANONICAL_COHORTS,   # re-exported
     grid_for,
 )
 
@@ -613,18 +600,18 @@ def _node_seed(seed, *parts):
 def generate_v2_table_deterministic(seed=DEFAULT_SEED, n_sim=200,
                                     evaluation_mode="reversal_endpoint",
                                     prime_timing="lumped_t0"):
-    """Rebuild the per-model k lookup tables.
+    """Rebuild the k lookup table for every active model.
 
-    Now genuinely deterministic, which the name previously only claimed: each
-    grid node derives its own seed from `seed` and the node itself, so the same
-    command always produces the same tables (EB-6).
+    Deterministic: each grid node derives its own seed from `seed` and from the
+    node itself, so the same command always produces the same tables (EB-6).
 
-    All six models are built over the one adult grid. The manuscript described
-    Jia as paediatric, but its published parameters are adult-scale and its
-    source is an adult study; that comment (EB-4, R1 p11 L46) is answered by
-    correcting the text. The `lo`/`hi` entries are the k values
-    obtained at time-on-CPB plus and minus two standard deviations -- a scenario
-    range, not an uncertainty interval, and the dashboard labels them as such.
+    Every reference model is adult, so there is one grid. The `lo`/`hi` entries
+    are the k values obtained at time-on-CPB plus and minus two standard
+    deviations -- a scenario range, not an uncertainty interval, and the
+    dashboard labels them as such.
+
+    Withheld models (nomogram_core.PENDING_MODELS) are skipped, so no table is
+    shipped for a model the pipeline does not offer.
     """
     main_prog = st.progress(0.0)
     status_text = st.empty()

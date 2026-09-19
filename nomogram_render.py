@@ -2,12 +2,9 @@
 Nomogram geometry and rendering, with no PyNomo, PyX, LaTeX or Ghostscript.
 
 The printed nomogram and the interactive one are drawn from this one module, so
-they cannot disagree. Previously there were two independent implementations fed
-by two different decay constants -- PyNomo's ``build_nomogram(k_best)`` for the
-PDF and a hand-rolled matplotlib chart reading ``k_mu`` from the lookup table for
-the screen -- which is the same "several constants in circulation" defect that
-produced the irreconcilable numbers in the submitted manuscript, surviving in
-the drawing layer.
+they cannot disagree. Two independent implementations fed by two different
+decay constants is the "several constants in circulation" defect of EB-3,
+surviving in the drawing layer.
 
 The geometry
 ------------
@@ -42,7 +39,6 @@ import math
 from dataclasses import dataclass
 from typing import Iterable, Sequence
 
-import matplotlib
 import numpy as np
 
 RENDER_VERSION = "2.0.0"
@@ -268,11 +264,11 @@ def render_pdf(geom: NomogramGeometry, path: str, *, footer_lines: Iterable[str]
     """Write a print-ready A4 nomogram. No band is drawn -- see the module note."""
     import matplotlib.pyplot as plt
 
+    import textwrap
+
     fig = plt.figure(figsize=(8.27, 11.69))          # A4 portrait
     ax = fig.add_axes([0.10, 0.17, 0.80, 0.74])
     draw_nomogram(geom, ax=ax, title=title, patient=patient, residual_band=None)
-
-    import textwrap
 
     y = 0.125
     for i, line in enumerate(footer_lines):

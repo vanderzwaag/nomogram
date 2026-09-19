@@ -1,8 +1,7 @@
 """
 Agreement statistics for the heparin decay nomogram (EB-3).
 
-Everything the reviewers asked for that the submitted code did not compute:
-a single enforced sign convention, a formal test for proportional bias,
+A single enforced sign convention, a formal test for proportional bias,
 relative as well as absolute error, performance stratified by elapsed time and
 by residual load, and coverage against a stated clinically relevant threshold.
 
@@ -14,9 +13,9 @@ One convention is defined here and used by every figure, table and sentence:
 
 A POSITIVE difference therefore means the nomogram UNDER-estimates residual
 heparin (and so would lead to under-dosing of protamine). Nothing in this
-repository is permitted to compute the difference the other way round; the
-submitted analysis reported -5.5 IU in the text and +5.62 IU in the Figure 2
-legend precisely because two orderings were in use at once.
+repository is permitted to compute the difference the other way round: two
+orderings in use at once is how one analysis came to be reported with two
+different signs.
 """
 
 from __future__ import annotations

@@ -4,7 +4,6 @@ import streamlit as st
 import matplotlib.pyplot as plt
 import math
 import pickle
-import itertools
 import pandas as pd
 
 from calibration import parameter_uncertainty, summarise_k
@@ -56,14 +55,9 @@ Anyone using this tool outside the intended purpose stated above does so on thei
 # 1. SETUP & UTILS
 # ==========================================
 st.set_page_config(layout="wide", page_title="Heparin Decay Dashboard")
-# The dashboard carried its own APP_VERSION constant, which is how it came to
-# report v1.2.0 while the pipeline reported v2.0.0. It went unused here, so it is
-# simply gone; anything needing the version imports it from Nomogram_Models.
 
-# Model identity comes from one registry. The dashboard previously carried six
-# separate hardcoded lists, which is how the sidebar ended up spelling
-# "Lanoiselee" without the acute accent while the reports and figures spelled it
-# correctly (R1).
+# Model identity comes from one registry, so a label cannot drift from the
+# spelling the reports and figures use. The version comes from Nomogram_Models.
 MODEL_KEYS = list(MODEL_NAMES)
 # The three population-PK models, the only ones with published variability.
 CRI_MODELS_ALL = ("lanoiselee", "delavenne", "jia")
@@ -87,10 +81,8 @@ for key, val in DEFAULTS.items():
     if key not in st.session_state:
         st.session_state[key] = val
 
-# The grids are defined once, in parameter_spaces, and imported here. They were
-# previously duplicated in both files under a comment reading "use these exact
-# lists in both files", which is a drift risk rather than a guarantee; the
-# Methods section now quotes parameter_spaces.describe_grids() (EB-8).
+# Defined once in parameter_spaces and imported here; the Methods section and
+# the sidebar both quote describe_grids() (EB-8).
 heparin_grid = ADULT_GRID["dose_per_kg"]
 ibw_grid = ADULT_GRID["ibw"]
 time_to_grid = ADULT_GRID["time_to_cpb"]
@@ -126,21 +118,12 @@ def nearest(value, grid):
 def get_k_stats(hpkg, ibw_val, tto, ton, prime_val, table, model_name=None):
     """Look up k for the nearest grid node.
 
-    Three problems in the submitted version are fixed here.
-
-    1. A missing table returned a hard-coded k of 0.007 with no warning at all.
-       No table was ever shipped for PRODOSE-2, so selecting that model silently
-       produced every figure at k = 0.007 instead of its calibrated value of
-       about 0.0042 -- a 67% error in the decay constant, invisible to the user.
-       There is now no silent fallback.
-
-    2. The grid was hard-coded to the adult one, so the paediatric Jia model was
-       snapped to adult weight nodes (EB-4). The grid is now read from the
-       table's own metadata.
-
-    3. Nodes whose calibration ran into the k search bound were returned without
-       comment; they are now flagged, because a value sitting on a bound is an
-       artefact of the bound rather than an optimum (R1 p9 L29).
+    There is no fallback constant: a missing table raises rather than
+    substituting a default, because a wrong k propagates silently into every
+    figure. The grid is read from the table's own metadata rather than assumed,
+    and nodes whose calibration reached the k search bound are flagged -- a
+    value sitting on a bound is an artefact of the bound, not an optimum
+    (EB-6, R1 p9 L29).
     """
     if table is None:
         st.error(
@@ -203,14 +186,8 @@ def describe_k_table(table, model_name):
     )
 
 
-# Wrapper to get the remaining amount from the REFERENCE model for plotting.
-#
-# The submitted version reimplemented every model's trajectory here, alongside a
-# separate endpoint implementation in Nomogram_Models. Two copies of the same
-# equations can drift apart silently, and the manuscript then has no single
-# definition to quote. Both now come from nomogram_core, and the test suite
-# asserts that the trajectory evaluated at t = t_to + t_on equals the endpoint
-# (EB-6).
+# The trajectory and the endpoint are one implementation, in nomogram_core; a
+# test asserts the trajectory at t = t_to + t_on equals the endpoint (EB-6).
 def get_reference_remaining(model_name, t, bolus, prime, ibw, t_to, t_on=None):
     """Reference-model central-compartment amount (IU) at absolute time t (min).
 
@@ -235,9 +212,8 @@ def get_lanoiselee_cri(initial_bolus, additional_boluses, n_pat=250, seed=DEFAUL
 
     additional_boluses: list of tuples [(time, dose), ...]
 
-    `seed` makes the band reproducible: the submitted version drew from the
-    unseeded global np.random, so the band moved on every rerun and no reported
-    interval could be reproduced (EB-6).
+    `seed` makes the band reproducible; without one it moves on every rerun
+    (EB-6).
 
     The band describes spread BETWEEN simulated patients under the published
     interindividual variability. It is not uncertainty in the published
@@ -245,16 +221,12 @@ def get_lanoiselee_cri(initial_bolus, additional_boluses, n_pat=250, seed=DEFAUL
     calibration.py for that (EB-2).
     """
     rng = np.random.default_rng(seed)
-    # Population Means (from your R script)
-    pop_params = {
-        'Cl': 1500.18 / 60,
-        'Vc': 4011.12,
-        'Vp': 1458.59,
-        'Q': 287.57 / 60
-    }
-    # Variability (omega SDs), read from the single parameter record.
-    _iiv = MODEL_PARAMETERS["lanoiselee"].iiv
-    omega = np.array([_iiv["Cl"], _iiv["Vc"], _iiv["Vp"], _iiv["Q"]])
+    # Point estimates and variability both come from the one parameter record,
+    # so a correction there reaches the band. Lanoiselee's are already in mL and
+    # mL/min.
+    _p = MODEL_PARAMETERS["lanoiselee"]
+    pop_params = {k: _p.values[k] for k in ("Cl", "Vc", "Vp", "Q")}
+    omega = np.array([_p.iiv[k] for k in ("Cl", "Vc", "Vp", "Q")])
     
     times = np.linspace(0, 120, 121)
     all_sims = np.zeros((n_pat, len(times)))
@@ -272,7 +244,6 @@ def get_lanoiselee_cri(initial_bolus, additional_boluses, n_pat=250, seed=DEFAUL
         # Initial state: [Central (AcH), Peripheral (ApH)]
         # Add the very first bolus at t=0
         curr_state = [initial_bolus, 0.0] 
-        full_traj_x = []
         full_traj_y = []
 
         # Iterate through time segments between boluses
@@ -338,17 +309,21 @@ def get_delavenne_cri(initial_bolus, additional_boluses, patient_weight,
     """
     rng = np.random.default_rng(seed)
     
-    # 1. Calculate Population Means based on Covariates (Weight)
-    # Convert to standard units (mL, mL/min)
-    pop_Vc_mL = (3.1 * (patient_weight / 70.0)**1.0) * 1000.0
-    pop_Cl_mLmin = ((0.841 * (patient_weight / 70.0)**0.767) * 1000.0) / 60.0
-    pop_Vp_mL = 2.23 * 1000.0
-    pop_Q_mLmin = (4.67 * 1000.0) / 60.0
+    # 1. Population means, from the one parameter record, with the published
+    #    weight covariates applied and converted to mL and mL/min. The exponents
+    #    are parameters there rather than literals, so their uncertainty can be
+    #    propagated (EB-2).
+    _p = MODEL_PARAMETERS["delavenne"]
+    _v, _w = _p.values, patient_weight / 70.0
+    pop_Vc_mL = _v["Vc_L"] * _w ** _v["wt_exponent_Vc"] * 1000.0
+    pop_Cl_mLmin = _v["Cl_L_h"] * _w ** _v["wt_exponent_Cl"] * 1000.0 / 60.0
+    pop_Vp_mL = _v["Vp_L"] * 1000.0
+    pop_Q_mLmin = _v["Q_L_h"] * 1000.0 / 60.0
 
     # 2. Variability (omega SDs), order [Cl, Vc, Vp, Q] to match the loop below.
     # Vp and Q carry no reported IIV and are held fixed.
-    _iiv = MODEL_PARAMETERS["delavenne"].iiv
-    omega = np.array([_iiv["Cl_L_h"], _iiv["Vc_L"], _iiv["Vp_L"], _iiv["Q_L_h"]])
+    omega = np.array([_p.iiv["Cl_L_h"], _p.iiv["Vc_L"],
+                      _p.iiv["Vp_L"], _p.iiv["Q_L_h"]])
     
     pop_params = [pop_Cl_mLmin, pop_Vc_mL, pop_Vp_mL, pop_Q_mLmin]
     
@@ -410,32 +385,28 @@ def get_jia_cri(initial_bolus, additional_boluses, patient_weight,
                 n_pat=250, seed=DEFAULT_SEED):
     """Interindividual-variability band for the Jia model.
 
-    RESOLVED (EB-6): the submitted version's docstring gave the variability as
-    CL 0.176, Vc 0.114, Q 0.0573, Vp 0.111 while its code used
-    [0.073, 0.081, 0.144, 0.318] -- different numbers in a different order --
-    and additionally took their square root, so it treated them as variances
-    where the other two models treated theirs as standard deviations. Both sets
-    were wrong. The values are now read from MODEL_PARAMETERS, where they have
-    been checked against the source table and converted from the published
-    omega-squared column: Cl 0.3493, Vc 0.3240, Q 0.3127, and Vp fixed at zero
-    as the source fixes it. They are omega SDs, as for the other two models, so
-    no square root is taken here.
+    Parameters and variability both come from MODEL_PARAMETERS, where the
+    variability is the square root of the published omega-squared column and Vp
+    is fixed at zero as the source fixes it. They are omega SDs, as for the
+    other two models, so no square root is taken here (EB-6).
 
     Jia is an ADULT model (EB-4) and carries no weight covariate, so this band
     is identical at every body weight -- IBW scales the administered bolus but
     never the elimination.
     """
     rng = np.random.default_rng(seed)
-    # 1. Population Means (mL and mL/min)
-    pop_Vc_mL = 3.04 * 1000.0
-    pop_Cl_mLmin = (1.18 * 1000.0) / 60.0
-    pop_Vp_mL = 8.01 * 1000.0
-    pop_Q_mLmin = (0.171 * 1000.0) / 60.0
+    # 1. Population means, from the one parameter record, converted to mL and
+    #    mL/min. Jia carries no weight covariate.
+    _p = MODEL_PARAMETERS["jia"]
+    _v = _p.values
+    pop_Vc_mL = _v["Vc_L"] * 1000.0
+    pop_Cl_mLmin = _v["Cl_L_h"] * 1000.0 / 60.0
+    pop_Vp_mL = _v["Vp_L"] * 1000.0
+    pop_Q_mLmin = _v["Q_L_h"] * 1000.0 / 60.0
 
-    # 2. Variability (omega SDs), order [Cl, Vc, Vp, Q]. See the docstring:
-    # the submitted code and its own docstring disagreed on these values.
-    _iiv = MODEL_PARAMETERS["jia"].iiv
-    omega = np.array([_iiv["Cl_L_h"], _iiv["Vc_L"], _iiv["Vp_L"], _iiv["Q_L_h"]])
+    # 2. Variability (omega SDs), order [Cl, Vc, Vp, Q] to match the loop below.
+    omega = np.array([_p.iiv["Cl_L_h"], _p.iiv["Vc_L"],
+                      _p.iiv["Vp_L"], _p.iiv["Q_L_h"]])
     pop_params = [pop_Cl_mLmin, pop_Vc_mL, pop_Vp_mL, pop_Q_mLmin]
     
     times = np.linspace(0, 120, 121)
@@ -515,6 +486,12 @@ with st.sidebar.expander("Simulation Settings"):
     t_on_sd = st.number_input("Time on CPB SD (min)", value=15.0)
     if st.button("Regenerate Lookup Tables"):
         generate_v2_table_deterministic()
+
+with st.sidebar.expander("Calibration grid"):
+    # The nodes the lookup tables are built on, quoted from the one definition
+    # the Methods section and the analysis runner also read (EB-8).
+    st.code(describe_grids(), language=None)
+    st.caption("Inputs are snapped to the nearest node of this grid.")
 
 st.sidebar.divider()
 st.sidebar.header("2. Plot My Patient")
@@ -760,11 +737,8 @@ with tab_clinical:
 
         # ONE sign convention, defined in agreement.py and used everywhere:
         # difference = reference model - nomogram, so a positive number means
-        # the nomogram reads LOW. The submitted dashboard computed
-        # (nomogram - reference) here while the Bland-Altman analysis computed
-        # (reference - nomogram), which is how the same result appeared as
-        # -5.5 IU in the manuscript body and +5.62 IU in the Figure 2 legend
-        # (EB-3, R1 Figure 2).
+        # the nomogram reads LOW. Computing it the other way round here is what
+        # made the dashboard and the analysis disagree in sign (EB-3).
         diff = difference(res_ref, res_simp)
         pct_err = (diff / res_ref) * 100 if res_ref > 0 else 0
         
@@ -834,13 +808,10 @@ with tab_topup:
     
     # --- REFERENCE MODEL (exact superposition) ---
     #
-    # Superposition is exact for the models that are linear in dose. PRODOSE and
-    # PRODOSE-2 are not: they make the slow-pool half-life a function of IU/kg.
-    # The submitted code handled PRODOSE-2 with a hand-written special case but
-    # passed the top-up through the ordinary PRODOSE trajectory, which gave a
-    # 5,000 IU top-up in a 70 kg patient the elimination half-life of a
-    # 71 IU/kg induction dose instead of the patient's own. Both are now handled
-    # in one place, by holding the dose-dependent covariate at the index bolus
+    # Superposition is exact only for the models that are linear in dose.
+    # PRODOSE and PRODOSE-2 make the slow-pool half-life a function of IU/kg, so
+    # a supplemental bolus must not be passed through the ordinary trajectory:
+    # the dose-dependent covariate is held at the index bolus, in one place
     # (see nomogram_core.reference_amount_with_topups).
     topups = ((float(t_topup), float(bolus_val)),)
 

@@ -1,31 +1,23 @@
 """
 Seeded, reproducible calibration of the simplified decay constant k.
 
-Three things changed relative to the submitted version, each answering a
-specific reviewer comment:
-
-EB-3 / R1 Fig 2 -- **every** draw of randomness now comes from an explicit
-    ``numpy.random.Generator`` seeded from a single integer that is recorded in
-    the run manifest. The submitted code called the global ``np.random`` with no
-    seed anywhere, so ``find_best_k``, the replicate interval and the
-    sensitivity analysis each produced a different cohort on every execution.
-    That, and not rounding, is why the manuscript body and the Figure 2 legend
-    could disagree on both the value and the sign of the bias.
+EB-3 / R1 Fig 2 -- **every** draw of randomness comes from an explicit
+    ``numpy.random.Generator`` seeded from a single integer recorded in the run
+    manifest. Unseeded draws are why the same analysis could report a different
+    value, and a different sign, for the bias on two runs.
 
 EB-3 -- the objective function is a parameter, not a hard-coded expression, so
     the robustness of k to the choice of loss (Bland-Altman composite, RMSE,
     MAPE, asymmetric clinical loss) can be reported.
 
 EB-4 -- calibration can target the residual amount at the single reversal
-    timepoint (what the submitted analysis did) or the decay trajectory across
-    a grid of timepoints per patient. The manuscript's claim must match
-    whichever is used.
+    timepoint or the decay trajectory across a grid of timepoints per patient.
+    The manuscript's claim must match whichever is used.
 
-EB-2 -- two distinct intervals are produced and must never be conflated:
-    a Monte Carlo sampling-precision interval (repeat cohorts, fixed published
-    parameters -- what the submitted "bootstrap" measured) and a
-    parameter-uncertainty interval (published PK parameters resampled from
-    their reported uncertainty).
+EB-2 -- two distinct intervals are produced and must never be conflated: a
+    Monte Carlo sampling-precision interval (repeat cohorts, fixed published
+    parameters) and a parameter-uncertainty interval (published PK parameters
+    resampled from their reported uncertainty).
 """
 
 from __future__ import annotations
@@ -372,7 +364,7 @@ def monte_carlo_precision(spec: CohortSpec, model_name: str, *, seed: int,
                           **kwargs) -> pd.DataFrame:
     """Repeat calibration on fresh cohorts drawn from the SAME fixed distributions.
 
-    This is what the submitted code called a "bootstrap". It is not one: no
+    Called a "bootstrap" in earlier versions. It is not one: no
     dataset is being resampled. It quantifies only how precisely k is pinned
     down by a cohort of ``n_sim`` simulated patients, with the published PK
     parameters held at their point estimates and the input distributions held

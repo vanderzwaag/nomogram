@@ -8,7 +8,7 @@ command:
 ```bash
 pip install -r requirements-frozen.txt   # the exact versions the run used
 python run_analysis.py --seed 20260912 --outdir outputs/frozen
-python -m pytest tests/ -q               # 164 checks, including implementation verification
+python -m pytest tests/ -q               # the full suite, including implementation verification
 ```
 
 Pure Python; no system packages. `requirements.txt` installs current releases
@@ -33,7 +33,7 @@ decision. Re-running with the same seed reproduces every CSV byte-for-byte.
 | EB-4 | Full-range and boundary coverage grids; nine shifted simulated institutions, including one matching the small-bodied adult population the Jia model was derived in. |
 | EB-5 | Top-up grid over bolus sizes x timings x repeats, with worst case as well as mean; prime-timing convention stated and its effect on k quantified. |
 | EB-6 | Automatic implementation verification (25 checks), unit tests, a table of derived PK constants for comparison against each source, and a run manifest recording seeds and versions. |
-| EB-8 | k and its interval for all six models; the calibration grid defined in code (`parameter_spaces.describe_grids()`). |
+| EB-8 | k and its interval for every active model; the calibration grid defined in code (`parameter_spaces.describe_grids()`) and printed in `summary.md`. |
 | R2 | Correlated-input sensitivity via a Gaussian copula. |
 
 ## Defects found while doing this
@@ -121,8 +121,9 @@ the damage was confined to the credible bands and the uncertainty propagation.
     figures spelled it correctly. Identity now comes from one registry, and a
     test executes the whole dashboard and asserts the labels match it.
 17. **No lookup table was ever shipped for PRODOSE-2**, and the five that
-    existed predated seeding. All six are regenerated deterministically and
-    carry a `__metadata__` record of seed, grid, sample size and conventions.
+    existed predated seeding. Every active model's table is now regenerated
+    deterministically and carries a `__metadata__` record of seed, grid, sample
+    size and conventions.
 18. **Delavenne's weight exponents were literals.** `(w/70)**1.0` and `**0.767`
     were hard-coded, so the 29% RSE on the clearance exponent could not be
     propagated. They are parameters now. Because the covariate is centred on
@@ -217,7 +218,7 @@ evidence travel together.
 | `Nomogram_Models.py` | Dashboard-facing wrappers, PDF generation, figures. |
 | `streamlit_app.py` | The dashboard. |
 | `nomogram_render.py` | Nomogram geometry and rendering. Shared by the printed PDF and the interactive chart. No PyNomo, PyX, LaTeX or Ghostscript. |
-| `tests/` | 164 checks. |
+| `tests/` | The test suite. |
 
 ## Author decisions — all settled
 

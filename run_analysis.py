@@ -580,7 +580,8 @@ def _write_summary(outdir, args, spec, k_table, agr, obj, sens, modes, ptim,
              f"scipy {manifest['software_versions']['scipy']}, "
              f"pandas {manifest['software_versions']['pandas']}\n")
 
-    L.append("## Calibrated decay constant, all six models (EB-8)\n")
+    L.append(f"## Calibrated decay constant, all {len(core.MODEL_NAMES)} "
+             "active models (EB-8)\n")
     t = k_table[["display_name", "population", "k", "mc_interval_low",
                  "mc_interval_high", "half_life_min"]].copy()
     L.append("| Model | Population | k (/min) | MC sampling interval | Apparent t1/2 (min) |")
@@ -593,6 +594,11 @@ def _write_summary(outdir, args, spec, k_table, agr, obj, sens, modes, ptim,
              "**not** quantify uncertainty in the published PK parameters, in the "
              "institutional input estimates, in model selection, or in an "
              "individual patient's prediction (EB-2).\n")
+
+    L.append("## Calibration grid (EB-8)\n")
+    L.append("```")
+    L.append(ps.describe_grids())
+    L.append("```\n")
 
     L.append("## Agreement on an internal resample (EB-3)\n")
     L.append("| Model | Bias (IU) | 95% LoA (IU) | MAPE (%) | Max abs error (%) | "

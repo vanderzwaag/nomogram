@@ -115,13 +115,15 @@ comment identifiers (EB-1…EB-8, R1, R2) are given where a change answers one.
   as open source while putting the dashboard behind a password was a
   contradiction, and the code is now public.
 - **PyNomo, PyX, LaTeX, Ghostscript, ReportLab and PyPDF2 are no longer
-  required.** `packages.txt` is empty. The nomogram is drawn by
+  required.** `packages.txt` is gone. The nomogram is drawn by
   `nomogram_render` in matplotlib, which also made the printed chart testable —
   it was the only output the suite could not cover.
-- **All six lookup tables regenerated deterministically**, each carrying a
+- **The lookup tables are regenerated deterministically**, each carrying a
   `__metadata__` record of seed, grid, sample size and calibration conventions.
   Tables without that record are reported as unreproducible rather than used
-  silently.
+  silently. Only active models get one: the table for the withheld PRODOSE-2 is
+  no longer shipped, since the generator cannot rebuild a table for a model the
+  pipeline does not offer.
 - **API:** `bootstrap_k_distribution` renamed to `monte_carlo_k_distribution`
   (no dataset is resampled; the old name is aliased). `find_best_k`,
   `sensitivity_analysis` and `run_nomogram` now take a `seed`.
@@ -175,7 +177,7 @@ comment identifiers (EB-1…EB-8, R1, R2) are given where a change answers one.
   now rebuilt from the same seeded test cohort as the agreement table and
   therefore cannot quote different numbers from the text. PDF timestamps are
   suppressed so re-running reproduces the figures byte-for-byte.
-- **164 automated tests**, including an end-to-end execution of the dashboard
+- **165 automated tests**, including an end-to-end execution of the dashboard
   against a recording Streamlit stub.
 - **New modules:** `nomogram_core`, `calibration`, `agreement`,
   `parameter_spaces`, `topup`, `benchmarks`, `nomogram_render`.

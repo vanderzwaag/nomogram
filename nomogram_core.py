@@ -19,9 +19,10 @@ for every model, so the trajectory and endpoint implementations cannot drift
 apart.  That equality is what makes trajectory-based calibration (EB-4) a
 supported option rather than an assumption.
 
-Parameter provenance is recorded in ``MODEL_PARAMETERS`` below; anything marked
-``UNVERIFIED`` must be checked against the source publication before the
-manuscript is resubmitted.
+Parameter provenance is recorded in ``MODEL_PARAMETERS`` below: source,
+published values, interindividual variability, reported uncertainty, and a note
+on anything that could not be verified against the source publication. Nothing
+currently carries such a note.
 """
 
 from __future__ import annotations

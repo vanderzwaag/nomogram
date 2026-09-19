@@ -234,3 +234,35 @@ def test_no_bundled_screenshot_of_the_nomogram():
         "the on-screen chart must come from the geometry the PDF was rendered "
         "from, not from one rebuilt in the dashboard"
     )
+
+
+def test_dashboard_does_not_restate_published_parameter_values():
+    """Point estimates, like the variability, come from the one registry.
+
+    The credible-band functions carried their own copies of every population
+    parameter while reading only the IIV from MODEL_PARAMETERS. The copies
+    happened to agree, but two transcription errors in this project were found
+    in exactly that arrangement, and a correction to the registry would not
+    have reached the bands.
+
+    Numeric literals are read from the parsed syntax tree, so a value named in
+    a docstring or comment is not mistaken for one the code uses.
+    """
+    import ast
+    from pathlib import Path
+
+    import nomogram_core as core
+
+    tree = ast.parse(Path("streamlit_app.py").read_text(encoding="utf-8"))
+    literals = {n.value for n in ast.walk(tree)
+                if isinstance(n, ast.Constant) and isinstance(n.value, float)}
+
+    published = set()
+    for model in ("lanoiselee", "delavenne", "jia"):
+        published.update(core.MODEL_PARAMETERS[model].values.values())
+
+    restated = sorted(literals & published - {0.0, 1.0})
+    assert not restated, (
+        f"published parameter values written out in the dashboard: {restated}. "
+        "Read them from nomogram_core.MODEL_PARAMETERS instead."
+    )

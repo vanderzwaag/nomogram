@@ -59,7 +59,7 @@ python -m pip install -r requirements-frozen.txt
 Verify the installation:
 
 ```bash
-python -m pytest tests/ -q         # 164 checks, ~10 s
+python -m pytest tests/ -q         # the full suite, ~10 s
 ```
 
 ## Running it
@@ -123,7 +123,7 @@ are recorded per model in `nomogram_core.MODEL_PARAMETERS`.
 | `make_supplementary_figures.py` | Main-text Figure 2 and supplementary figures S1–S4. |
 | `Nomogram_Models.py` | Dashboard-facing wrappers and figures. |
 | `streamlit_app.py` | The dashboard. |
-| `tests/` | 164 checks. |
+| `tests/` | The test suite. |
 
 ## How the nomogram works
 

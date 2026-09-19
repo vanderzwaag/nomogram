@@ -388,9 +388,9 @@ def figure_s4(sens, outdir):
     # Listed bottom-to-top, since barh puts index 0 at the bottom: the
     # influential means sit low and the negligible SD terms high, which keeps
     # the top-left annotation corner free in every panel. Do NOT reach for
-    # invert_yaxis() -- the axes are shared, so it applies once per call and
-    # flips the whole grid an odd or even number of times depending on how many
-    # models are active. With six models that cancelled out and hid the bug.
+    # invert_yaxis(): the axes are shared, so it applies once per call and flips
+    # the whole grid an odd or even number of times depending on how many models
+    # are active -- with an even number it cancels and the bug is invisible.
     order = ["ibw_mean", "t_on_mean", "t_to_mean", "ibw_sd", "t_on_sd", "t_to_sd"]
     limit = np.ceil(sens["pct_change"].abs().max() / 5) * 5
 
@@ -414,7 +414,7 @@ def figure_s4(sens, outdir):
         ax.set_xlim(-limit, limit)
 
         # Top row is an SD parameter, whose bars are negligible in every panel,
-        # so this corner is free of marks for all six models.
+        # so this corner is free of marks whichever models are active.
         worst = sub.loc[sub["pct_change"].abs().idxmax()]
         ax.text(0.03, 0.95, f"largest {worst['pct_change']:+.1f}%",
                 transform=ax.transAxes, ha="left", va="top",

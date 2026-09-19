@@ -5,20 +5,19 @@ Single source of truth for every input range quoted in the manuscript, so the
 Methods section, Table 1, the lookup-table generator and the analysis runner
 cannot describe different things (EB-3, EB-8).
 
-Four questions the reviewers raised are settled here rather than in prose:
+Three questions the reviewers raised are settled here rather than in prose:
 
-EB-3  Which cohort is THE representative cohort? Two definitions were in
-      circulation. See CANONICAL_COHORTS and the note below.
+EB-3  Which cohort is THE representative cohort? See CANONICAL_COHORTS.
 EB-4  Are the full input ranges and their boundary combinations covered?
-      See ADULT_GRID / PAEDIATRIC_GRID and boundary_cohort().
+      See ADULT_GRID, full_range_cohort() and boundary_cohort().
 EB-4  Is transportability tested? See SHIFTED_INSTITUTIONS.
-EB-4  Is the paediatric Jia model run in a paediatric space?
-      See PAEDIATRIC_GRID and CANONICAL_COHORTS["paediatric"].
+
+There is no paediatric grid; every reference model is adult. See the note
+above ADULT_GRID.
 """
 
 from __future__ import annotations
 
-import itertools
 from typing import Dict, Sequence
 
 import pandas as pd
@@ -165,6 +164,7 @@ SHIFTED_INSTITUTIONS: Dict[str, CohortSpec] = {
         ibw_min=35.0, ibw_max=90.0),
 }
 
+
 def institutions_for(population: str = "adult") -> Dict[str, CohortSpec]:
     """Shifted institutions. ``population`` is retained for call compatibility."""
     grid_for(population)
@@ -173,15 +173,15 @@ def institutions_for(population: str = "adult") -> Dict[str, CohortSpec]:
 
 def describe_grids() -> str:
     """Methods-ready description of the calibration grid (EB-8)."""
-    lines = []
-    for label, g in (("Adult", ADULT_GRID),):
-        n = 1
-        for v in g.values():
-            n *= len(v)
-        lines.append(f"{label} calibration grid ({n} nodes):")
-        lines.append(f"  heparin dose   : {g['dose_per_kg']} IU/kg")
-        lines.append(f"  ideal body wt  : {g['ibw']} kg")
-        lines.append(f"  prime heparin  : {g['prime']} IU")
-        lines.append(f"  time to CPB    : {g['time_to_cpb']} min")
-        lines.append(f"  time on CPB    : {g['time_on_cpb']} min")
-    return "\n".join(lines)
+    g = ADULT_GRID
+    n = 1
+    for v in g.values():
+        n *= len(v)
+    return "\n".join([
+        f"Adult calibration grid ({n} nodes):",
+        f"  heparin dose   : {g['dose_per_kg']} IU/kg",
+        f"  ideal body wt  : {g['ibw']} kg",
+        f"  prime heparin  : {g['prime']} IU",
+        f"  time to CPB    : {g['time_to_cpb']} min",
+        f"  time on CPB    : {g['time_on_cpb']} min",
+    ])
