@@ -1,7 +1,7 @@
 # Frozen analysis run
 
-- Generated: 2026-09-13T13:40:13.666983+00:00
-- Commit: `c937af2-dirty`  **working tree dirty -- commit before quoting these numbers**
+- Generated: 2026-09-19T14:24:03.188453+00:00
+- Commit: `2caf540`
 - Seed: `20260912`
 - Cohort: grid_snapped_70_15_60: 400 IU/kg, prime 5000 IU, IBW 70+/-10 kg, time to CPB 15+/-3.75 min, time on CPB 60+/-15 min [adult]
 - Sign convention: Difference = reference model - nomogram (positive = nomogram under-estimates)
@@ -176,7 +176,6 @@ lanoiselee, 70 kg, 400 IU/kg bolus + 5000 IU prime = 33,000 IU total load, k = 0
 
 Reading the residual load off the nomogram requires no calculation; converting it into a protamine dose requires applying the institutional ratio (EB-8).
 
-## Outstanding author decisions
+## Outstanding author actions
 
 - **EB-4 / R1 p11 L46** -- Correct the manuscript's description of the Jia model
-- **EB-1** -- State the assumption under which central-compartment amount maps to a protamine dose

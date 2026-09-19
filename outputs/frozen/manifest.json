@@ -1,5 +1,5 @@
 {
-  "generated_utc": "2026-09-13T13:40:13.666983+00:00",
+  "generated_utc": "2026-09-19T14:24:03.188453+00:00",
   "analysis_version": "2.0.0",
   "core_version": "2.0.0",
   "render_version": "2.0.0",
@@ -20,15 +20,15 @@
   },
   "command_line": "run_analysis.py --seed 20260912 --outdir outputs/frozen",
   "git": {
-    "commit": "c937af204a4d487cb3f12f2ec8b8f8ac43ee261b",
-    "short_commit": "c937af2",
+    "commit": "2caf540972a6e8d8c2bd2f780fc698384d62ba0a",
+    "short_commit": "2caf540",
     "branch": "claude/manuscript-revision-code-j9hc9b",
-    "describe": "c937af2-dirty",
-    "dirty": true
+    "describe": "2caf540",
+    "dirty": false
   },
   "software_versions": {
     "python": "3.11.15",
-    "platform": "Linux-6.18.44-fc-v24-x86_64-with-glibc2.39",
+    "platform": "Linux-6.18.44-fc-v37-x86_64-with-glibc2.39",
     "numpy": "2.4.6",
     "scipy": "1.17.1",
     "pandas": "3.0.5",
@@ -66,6 +66,8 @@
     "primary_objective": "bland_altman",
     "objective_definition": "|bias| + 0.1 x LoA width (primary)",
     "jia_population": "adult (small-bodied derivation cohort); the manuscript's paediatric description is an error",
+    "canonical_cohort_status": "Settled by the authors and fixed for the manuscript: 400 IU/kg induction bolus, 70 kg ideal body weight, 15 min to CPB, 60 min on CPB, 5,000 IU prime -- the nearest calibration-grid node, so that the calibration cohort, Table 1 and the k printed on the nomogram are the same thing. --cohort abstract reproduces the 75/20/65 cohort the submitted limits of agreement came from.",
+    "pharmacodynamic_layer": "Not modelled, by design. The pipeline represents the pharmacokinetic central-compartment amount only: no anti-Xa or ACT layer, no peripheral-compartment heparin, no antithrombin, no protamine pharmacology, no rebound. Converting a residual amount into a protamine dose requires an institutional ratio this pipeline does not supply (EB-1, EB-8). This is a stated scope boundary, not an omission pending resolution -- the two PK/PD reference models disagree with each other by 90-125 s in predicted ACT at the same anti-Xa concentration, which is why the pipeline stops short of that layer.",
     "iiv_substituted_for_missing_uncertainty": false,
     "parameter_uncertainty_basis": {
       "delavenne": {
@@ -282,11 +284,6 @@
       "comment": "EB-4 / R1 p11 L46",
       "action": "Correct the manuscript's description of the Jia model",
       "detail": "Jia is an ADULT model derived in a relatively small-bodied population, not a paediatric one. Its Vc of 3.04 L is within 2% of Delavenne's adult 3.1 L. The reviewers' request for a paediatric parameter space follows from the manuscript's own mis-description and is answered by correcting the text. The model carries no weight covariate, so it cannot be individualised by weight and the upper end of the adult calibration grid extrapolates beyond its derivation population; both are stated limitations. Transportability to a small-bodied adult population is evaluated explicitly."
-    },
-    {
-      "comment": "EB-1",
-      "action": "State the assumption under which central-compartment amount maps to a protamine dose",
-      "detail": "The pipeline reports PK central-compartment amount only; no pharmacodynamic (anti-Xa or ACT) layer is modelled."
     }
   ]
 }
