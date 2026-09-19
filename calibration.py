@@ -104,7 +104,18 @@ def sample_correlated_cohort(spec: CohortSpec, n: int, rng: np.random.Generator,
     """
     corr = np.full((3, 3), float(correlation))
     np.fill_diagonal(corr, 1.0)
-    z = rng.multivariate_normal(np.zeros(3), corr, size=n)
+
+    # Correlate the latent normals through an explicit Cholesky factor, NOT
+    # through rng.multivariate_normal. That function defaults to an SVD, and an
+    # equicorrelation matrix has a repeated eigenvalue at every correlation
+    # (1 - rho, twice), so the basis of that eigenspace is mathematically
+    # arbitrary: any orthonormal basis is a valid decomposition. Which one
+    # LAPACK returns is a property of the build, not of the seed, so the same
+    # seed produced different cohorts on different machines -- a 1-2% shift in
+    # the reported bias and limits. The Cholesky factor of a positive-definite
+    # matrix is unique, so this depends on the seed alone.
+    lower = np.linalg.cholesky(corr)
+    z = rng.standard_normal((n, 3)) @ lower.T
 
     ibw = np.clip(spec.ibw_mean + spec.ibw_sd * z[:, 0], spec.ibw_min, spec.ibw_max)
     t_to = np.clip(spec.t_to_mean + spec.t_to_sd * z[:, 1], 0.0, None)

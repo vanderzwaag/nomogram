@@ -82,6 +82,15 @@ inconsistencies arose:
     `streamlit_app.py` and the endpoint in `nomogram_models.py`. Both now come
     from `nomogram_core`, and a test asserts they agree at the reversal timepoint.
 
+19. **The correlated-input cohort depended on the LAPACK build.**
+    `rng.multivariate_normal` defaults to an SVD, and an equicorrelation matrix
+    has a repeated eigenvalue at every correlation, so the basis of that
+    eigenspace is arbitrary and two builds can each return a valid but
+    different decomposition. The same seed therefore produced different
+    cohorts on different machines: the reported bias, limits and MAPE at
+    rho = 0.3 and 0.6 moved by 1-2%. Now drawn through an explicit Cholesky
+    factor, which is unique. Found by continuous integration, not by reading.
+
 ### Found by checking the code against the source parameter tables
 
 Three variability transcriptions were checked against the published tables. One

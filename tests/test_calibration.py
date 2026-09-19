@@ -220,3 +220,38 @@ def test_parameter_uncertainty_is_wider_than_sampling_precision():
         "not, the two intervals are measuring the same thing and the relabelling "
         "in EB-2 is not enough."
     )
+
+
+def test_correlated_cohort_does_not_depend_on_the_lapack_build():
+    """A seed must determine the cohort; the linear-algebra library must not.
+
+    ``rng.multivariate_normal`` defaults to an SVD, and the equicorrelation
+    matrix used here has a repeated eigenvalue at every correlation, so the
+    basis of that eigenspace is mathematically arbitrary. Two LAPACK builds may
+    each return a valid but different decomposition, which is how the same seed
+    produced correlated-input results that differed by 1-2% between machines.
+    The Cholesky factor of a positive-definite matrix is unique.
+    """
+    import ast
+    from pathlib import Path
+
+    source = Path(cal.__file__).read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    called = {
+        node.func.attr for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+    }
+    assert "multivariate_normal" not in called, (
+        "multivariate_normal's default SVD picks an arbitrary basis for a "
+        "repeated eigenvalue; use an explicit Cholesky factor"
+    )
+    assert "cholesky" in called
+
+    # Every decomposition is valid, so the check that matters is that the same
+    # seed gives the same cohort and the requested correlation is induced.
+    for rho in (0.0, 0.3, 0.6):
+        first = cal.sample_correlated_cohort(SPEC, 3000, np.random.default_rng(11), rho)
+        again = cal.sample_correlated_cohort(SPEC, 3000, np.random.default_rng(11), rho)
+        assert first.equals(again), f"rho={rho} is not reproducible from its seed"
+        observed = np.corrcoef(first["ibw"], first["time_on_cpb"])[0, 1]
+        assert abs(observed - rho) < 0.05, f"rho={rho}: induced {observed:.3f}"

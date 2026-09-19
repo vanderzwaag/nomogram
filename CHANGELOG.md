@@ -21,6 +21,18 @@ comment identifiers (EB-1…EB-8, R1, R2) are given where a change answers one.
 
 ### Fixed — defects that changed reported numbers
 
+- **The correlated-input analysis depended on the linear-algebra library, not
+  only on the seed (R2).** `rng.multivariate_normal` defaults to an SVD, and
+  the equicorrelation matrix imposed on weight, time to bypass and time on
+  bypass has a repeated eigenvalue at every correlation (1 - rho, twice). The
+  basis of that eigenspace is mathematically arbitrary, so two LAPACK builds
+  each return a valid but different decomposition and the same seed yields a
+  different cohort. CI caught it: the bias, limits and MAPE at rho = 0.3 and
+  0.6 moved by 1-2% between machines running identical numpy and scipy
+  versions. The latent normals are now correlated through an explicit Cholesky
+  factor, which is unique for a positive-definite matrix. The values in
+  `14_correlated_inputs.csv` change accordingly; the previous ones were not
+  reproducible.
 - **A table the pipeline no longer produces was still in the frozen archive.**
   `00_verification_source.csv` dated from the first version of the runner, when
   the benchmark table was a placeholder; five of its six rows read "PENDING -
