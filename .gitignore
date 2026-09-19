@@ -6,3 +6,7 @@ __pycache__/
 heparin_dose_decay_nomogram.pdf
 nomogram_a4.pdf
 nomogram_final.pdf
+
+# Manuscript correspondence is not part of the software record.
+*.docx
+*.doc

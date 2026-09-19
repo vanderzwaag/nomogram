@@ -149,7 +149,8 @@ classify it.
 
 ## Licence
 
-[MIT](LICENSE) — © 2026 Stanislaw Vander Zwaag.
+[MIT](LICENSE) — © 2026 Stanislaw Vander Zwaag, Imre Kukel, Asen Petrov,
+Jens Fassl.
 
 ## Citing
 
