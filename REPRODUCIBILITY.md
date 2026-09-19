@@ -222,9 +222,10 @@ evidence travel together.
 | `nomogram_render.py` | Nomogram geometry and rendering. Shared by the printed PDF and the interactive chart. No PyNomo, PyX, LaTeX or Ghostscript. |
 | `tests/` | 163 checks. |
 
-## Author decisions still open
+## Author decisions — all settled
 
-`manifest.json` lists these after every run:
+Every one is recorded under `decisions` in `manifest.json` after each run, so a
+reader of the archive can see what was chosen without reading this file.
 
 - ~~**EB-2** — transcribe the published %RSE.~~ **Done.** All three population
   models now propagate from published uncertainty. `--allow-iiv-proxy` is
@@ -234,12 +235,22 @@ evidence travel together.
 - ~~**EB-4** — confirm the paediatric parameter space for Jia.~~ **Resolved:**
   Jia is adult. The manuscript text needs correcting; no paediatric analysis is
   required.
-- **EB-1** — state the assumption under which central-compartment amount maps to
-  a protamine dose. The pipeline models pharmacokinetics only: no anti-Xa/ACT
-  layer, no peripheral-compartment heparin, no antithrombin, no protamine
-  pharmacology, no rebound.
-- **EB-3** — confirm the canonical cohort. The submitted limits of agreement
-  (−243 to +232 IU) come from the 75 / 20 / 65 cohort, not the 70 / 15 / 60 of
-  Table 1, which gives ±188 IU. `--cohort grid_snapped` (default) makes the
-  calibration cohort, Table 1 and the k the printed nomogram uses the same
-  thing; `--cohort abstract` keeps the published numbers instead.
+- ~~**EB-3** — confirm the canonical cohort.~~ **Settled:** 400 IU/kg induction
+  bolus, 70 kg ideal body weight, 15 min to CPB, 60 min on CPB, 5,000 IU prime —
+  the nearest calibration-grid node. This is `--cohort grid_snapped`, the
+  default, and it makes the calibration cohort, Table 1 and the *k* printed on
+  the nomogram the same thing. The submitted limits of agreement (−243 to
+  +232 IU) came from a 75 / 20 / 65 cohort; the canonical one gives ±188 IU.
+  `--cohort abstract` reproduces the old numbers for comparison.
+- ~~**EB-1** — the pharmacodynamic layer.~~ **Not an open decision: a design
+  choice.** The pipeline represents the pharmacokinetic central-compartment
+  amount only — no anti-Xa or ACT layer, no peripheral-compartment heparin, no
+  antithrombin, no protamine pharmacology, no rebound. Converting a residual
+  amount into a protamine dose requires an institutional ratio this pipeline
+  does not supply. The boundary is deliberate and is stated as scope: the two
+  PK/PD reference models disagree with each other by 90–125 s in predicted ACT
+  at the same anti-Xa concentration, with maximal responses of 520 s and 836 s,
+  which is precisely why the pipeline stops at the amount.
+
+The one thing still owed is to the manuscript, not the code: its description of
+the Jia model as paediatric must be corrected in the text.

@@ -464,6 +464,24 @@ def run(args) -> Path:
             "objective_definition": cal.OBJECTIVE_LABELS["bland_altman"],
             "jia_population": "adult (small-bodied derivation cohort); the "
                               "manuscript's paediatric description is an error",
+            "canonical_cohort_status":
+                "Settled by the authors and fixed for the manuscript: 400 IU/kg "
+                "induction bolus, 70 kg ideal body weight, 15 min to CPB, 60 min "
+                "on CPB, 5,000 IU prime -- the nearest calibration-grid node, so "
+                "that the calibration cohort, Table 1 and the k printed on the "
+                "nomogram are the same thing. --cohort abstract reproduces the "
+                "75/20/65 cohort the submitted limits of agreement came from.",
+            "pharmacodynamic_layer":
+                "Not modelled, by design. The pipeline represents the "
+                "pharmacokinetic central-compartment amount only: no anti-Xa or "
+                "ACT layer, no peripheral-compartment heparin, no antithrombin, "
+                "no protamine pharmacology, no rebound. Converting a residual "
+                "amount into a protamine dose requires an institutional ratio "
+                "this pipeline does not supply (EB-1, EB-8). This is a stated "
+                "scope boundary, not an omission pending resolution -- the two "
+                "PK/PD reference models disagree with each other by 90-125 s in "
+                "predicted ACT at the same anti-Xa concentration, which is why "
+                "the pipeline stops short of that layer.",
             "iiv_substituted_for_missing_uncertainty": bool(args.allow_iiv_proxy),
             "parameter_uncertainty_basis": {
                 m: cal.uncertainty_provenance(m)
@@ -536,13 +554,6 @@ def _outstanding(args) -> list:
                    "calibration grid extrapolates beyond its derivation "
                    "population; both are stated limitations. Transportability to "
                    "a small-bodied adult population is evaluated explicitly."),
-    })
-    items.append({
-        "comment": "EB-1",
-        "action": "State the assumption under which central-compartment amount maps "
-                  "to a protamine dose",
-        "detail": "The pipeline reports PK central-compartment amount only; no "
-                  "pharmacodynamic (anti-Xa or ACT) layer is modelled.",
     })
     return items
 
@@ -779,9 +790,16 @@ def _write_summary(outdir, args, spec, k_table, agr, obj, sens, modes, ptim,
              "converting it into a protamine dose requires applying the "
              "institutional ratio (EB-8).\n")
 
-    L.append("## Outstanding author decisions\n")
-    for item in manifest["outstanding_author_decisions"]:
-        L.append(f"- **{item['comment']}** -- {item['action']}")
+    outstanding = manifest["outstanding_author_decisions"]
+    if outstanding:
+        L.append("## Outstanding author actions\n")
+        for item in outstanding:
+            L.append(f"- **{item['comment']}** -- {item['action']}")
+    else:
+        L.append("## Outstanding author actions\n")
+        L.append("None. Every analysis decision is recorded under `decisions` in "
+                 "`manifest.json`; the scope boundaries are recorded there too and "
+                 "are design choices, not unresolved questions.")
     L.append("")
 
     (outdir / "summary.md").write_text("\n".join(L))
