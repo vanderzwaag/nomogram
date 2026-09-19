@@ -207,5 +207,8 @@ branch as of commit `def13e5`.
 > Internal version strings in this release read `v1.2.0`; "1.0" is the release
 > designation, not what the code reported.
 
+Release 2.0.0 is archived at
+doi:[10.5281/zenodo.22846043](https://doi.org/10.5281/zenodo.22846043).
+
 [2.0.0]: https://github.com/vanderzwaag/nomogram/releases/tag/v2.0.0
 [1.0.0]: https://github.com/vanderzwaag/nomogram/tree/main

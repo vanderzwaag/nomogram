@@ -24,8 +24,11 @@ authors:
   - family-names: "Fassl"
     given-names: "Jens"
     affiliation: "Institute of Cardiac Anaesthesia, Medical Faculty Carl Gustav Carus and Heart Centre, TUD Dresden University of Technology, Dresden, Germany"
-# Add the Zenodo DOI here once a release is archived, as:
-#   doi: "10.5281/zenodo.XXXXXXX"
+# Version DOI for the v2.0.0 deposit, reserved on Zenodo before publication so
+# the archived code contains its own identifier. Zenodo also mints a concept
+# DOI on publication that always resolves to the newest version; add it as
+# identifiers: -> type: doi once it is known.
+doi: "10.5281/zenodo.22846043"
 preferred-citation:
   type: article
   title: >-

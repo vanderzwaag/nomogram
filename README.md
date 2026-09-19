@@ -11,6 +11,8 @@ heparin, and renders the result as an institution-specific decay nomogram.
 Supporting code for manuscript **JCVA-D-26-01511**. Every number the manuscript
 reports regenerates from one seeded command at a tagged commit.
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22846043.svg)](https://doi.org/10.5281/zenodo.22846043)
+
 ---
 
 ## What it does
@@ -165,11 +167,12 @@ of Cardiothoracic and Vascular Anesthesia*. Manuscript JCVA-D-26-01511, under
 revision — replace with volume, pages and DOI on acceptance.
 
 **Software.** Vander Zwaag S, Kukel I, Petrov A, Fassl J. *Heparin decay
-nomogram pipeline*, version 2.0.0. 2026. https://github.com/vanderzwaag/nomogram
+nomogram pipeline*, version 2.0.0. Zenodo, 2026.
+doi:[10.5281/zenodo.22846043](https://doi.org/10.5281/zenodo.22846043)
 
 Cite the version you actually ran: 2.0.0 changes every statistic 1.x reported,
-so a citation without a version is ambiguous about which numbers are meant. Add
-the archived release DOI to `CITATION.cff` once a release is deposited.
+so a citation without a version is ambiguous about which numbers are meant. The
+DOI above is the version DOI for 2.0.0 and always resolves to this release.
 
 ## Generative AI declaration
 
