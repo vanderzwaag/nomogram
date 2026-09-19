@@ -409,7 +409,8 @@ def run(args) -> Path:
                               "bias_iu": ba.bias, "loa_low_iu": ba.loa_low,
                               "loa_high_iu": ba.loa_high,
                               "mean_abs_pct_error": rel.mean_abs_pct_error})
-    write("14_correlated_inputs.csv", pd.DataFrame(corr_rows))
+    corr = pd.DataFrame(corr_rows)
+    write("14_correlated_inputs.csv", corr)
 
     # ------------------------------------------- 11. worked example (EB-8)
     print("\n[11] Worked example for the manuscript (EB-8)")
@@ -533,7 +534,7 @@ def run(args) -> Path:
             print(f"    {name}")
 
     _write_summary(outdir, args, spec, k_table, agr, obj, sens, modes, ptim,
-                   pu, coverage, inst, ws, ex, manifest, internal)
+                   pu, coverage, inst, ws, ex, manifest, internal, corr)
     print("  wrote summary.md")
     return outdir
 
@@ -575,7 +576,8 @@ def _outstanding(args) -> list:
 
 
 def _write_summary(outdir, args, spec, k_table, agr, obj, sens, modes, ptim,
-                   pu, coverage, inst, ws, ex, manifest, internal_checks) -> None:
+                   pu, coverage, inst, ws, ex, manifest, internal_checks,
+                   corr) -> None:
     g = manifest["git"]
     L = []
     L.append("# Frozen analysis run\n")
@@ -775,15 +777,32 @@ def _write_summary(outdir, args, spec, k_table, agr, obj, sens, modes, ptim,
     piv = inst.pivot_table(index="institution", columns="model",
                            values="mape_transported")
     L.append("Mean absolute percentage error when the canonically calibrated k is "
-             "applied unchanged to a shifted population. Adult models are not run "
-             "All six models are adult and are evaluated in the same populations; "
-             "the small_bodied_adults row matches the body size the Jia model was "
+             "applied unchanged to a shifted population. Every reference model is "
+             "adult, so all are evaluated in the same populations; the "
+             "small_bodied_adults row matches the body size the Jia model was "
              "derived in (EB-4, R1 p11 L46).\n")
     L.append("| Institution | " + " | ".join(piv.columns) + " |")
     L.append("|---" * (len(piv.columns) + 1) + "|")
     for name, row in piv.iterrows():
         L.append(f"| {name} | " + " | ".join(
             "n/a" if pd.isna(v) else f"{v:.2f}" for v in row) + " |")
+    L.append("")
+
+    L.append("## Correlated inputs (R2)\n")
+    L.append("Weight, time to bypass and time on bypass are drawn independently "
+             "in the main analysis. Here they are drawn from a Gaussian copula "
+             "imposing the stated pairwise correlation on the latent normals, "
+             "which is the demonstrative answer to the covariance point. The "
+             "latent normals are correlated through a Cholesky factor: the "
+             "equicorrelation matrix has a repeated eigenvalue, so an SVD would "
+             "pick an arbitrary basis and the result would depend on the "
+             "linear-algebra library rather than on the seed.\n")
+    L.append("| Model | Correlation | Bias (IU) | 95% LoA (IU) | MAPE (%) |")
+    L.append("|---|---|---|---|---|")
+    for _, r in corr.iterrows():
+        L.append(f"| {core.DISPLAY_NAMES[r['model']]} | {r['input_correlation']:.1f} | "
+                 f"{r['bias_iu']:+.2f} | {r['loa_low_iu']:,.0f} to {r['loa_high_iu']:,.0f} | "
+                 f"{r['mean_abs_pct_error']:.2f} |")
     L.append("")
 
     L.append("## Most influential inputs, +/-20% (EB-8)\n")
