@@ -1,0 +1,46 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite both the software and the accompanying manuscript."
+title: "Heparin decay nomogram pipeline"
+abstract: >-
+  A simulation-calibrated informatics pipeline that fits a single-compartment
+  exponential approximation to published pharmacokinetic models of
+  unfractionated heparin, and renders the result as an institution-specific
+  decay nomogram. A research and educational instrument; not for clinical use.
+version: 2.0.0
+date-released: 2026-09-13
+license: MIT
+repository-code: "https://github.com/vanderzwaag/nomogram"
+type: software
+authors:
+  - family-names: "Vander Zwaag"
+    given-names: "Stanislaw"
+    affiliation: "Institute of Cardiac Anaesthesia, Medical Faculty Carl Gustav Carus and Heart Centre, TUD Dresden University of Technology, Dresden, Germany"
+  - family-names: "Kukel"
+    given-names: "Imre"
+    affiliation: "Institute of Cardiac Anaesthesia, Medical Faculty Carl Gustav Carus and Heart Centre, TUD Dresden University of Technology, Dresden, Germany"
+  - family-names: "Petrov"
+    given-names: "Asen"
+    affiliation: "Department of Cardiac Surgery, Medical Faculty Carl Gustav Carus and Heart Centre, TUD Dresden University of Technology, Dresden, Germany"
+  - family-names: "Fassl"
+    given-names: "Jens"
+    affiliation: "Institute of Cardiac Anaesthesia, Medical Faculty Carl Gustav Carus and Heart Centre, TUD Dresden University of Technology, Dresden, Germany"
+# Add the Zenodo DOI here once a release is archived, as:
+#   doi: "10.5281/zenodo.XXXXXXX"
+preferred-citation:
+  type: article
+  title: >-
+    From Multi-Compartment Models to the Bedside: A Simulation-Calibrated
+    Informatics Pipeline for Generating Institution-Specific Heparin Decay
+    Nomograms
+  authors:
+    - family-names: "Vander Zwaag"
+      given-names: "Stanislaw"
+    - family-names: "Kukel"
+      given-names: "Imre"
+    - family-names: "Petrov"
+      given-names: "Asen"
+    - family-names: "Fassl"
+      given-names: "Jens"
+  journal: "Journal of Cardiothoracic and Vascular Anesthesia"
+  year: 2026
+  notes: "Manuscript JCVA-D-26-01511, under revision. Update with volume, pages and DOI on acceptance."

@@ -172,7 +172,7 @@ comment identifiers (EB-1…EB-8, R1, R2) are given where a change answers one.
   against a recording Streamlit stub.
 - **New modules:** `nomogram_core`, `calibration`, `agreement`,
   `parameter_spaces`, `topup`, `benchmarks`, `nomogram_render`.
-- **`REPRODUCIBILITY.md`**, `LICENSE` (MIT) and this changelog.
+- **`REPRODUCIBILITY.md`**, `LICENSE` (MIT), `CITATION.cff` and this changelog.
 
 ### Documentation
 

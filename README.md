@@ -153,8 +153,22 @@ classify it.
 
 ## Citing
 
-Please cite the accompanying manuscript (JCVA-D-26-01511) and this repository by
-its archived release DOI. Release history is in [CHANGELOG.md](CHANGELOG.md).
+Please cite both the manuscript and the software. Machine-readable metadata is
+in [CITATION.cff](CITATION.cff); release history is in
+[CHANGELOG.md](CHANGELOG.md).
+
+**Manuscript.** Vander Zwaag S, Kukel I, Petrov A, Fassl J. From
+multi-compartment models to the bedside: a simulation-calibrated informatics
+pipeline for generating institution-specific heparin decay nomograms. *Journal
+of Cardiothoracic and Vascular Anesthesia*. Manuscript JCVA-D-26-01511, under
+revision — replace with volume, pages and DOI on acceptance.
+
+**Software.** Vander Zwaag S, Kukel I, Petrov A, Fassl J. *Heparin decay
+nomogram pipeline*, version 2.0.0. 2026. https://github.com/vanderzwaag/nomogram
+
+Cite the version you actually ran: 2.0.0 changes every statistic 1.x reported,
+so a citation without a version is ambiguous about which numbers are meant. Add
+the archived release DOI to `CITATION.cff` once a release is deposited.
 
 ## Generative AI declaration
 
