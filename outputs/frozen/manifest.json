@@ -1,5 +1,5 @@
 {
-  "generated_utc": "2026-09-19T15:42:18.795922+00:00",
+  "generated_utc": "2026-09-19T16:03:02.946392+00:00",
   "analysis_version": "2.0.0",
   "core_version": "2.0.0",
   "render_version": "2.0.0",
@@ -20,10 +20,10 @@
   },
   "command_line": "run_analysis.py --seed 20260912 --outdir outputs/frozen",
   "git": {
-    "commit": "4fc19723d4cfa0f84a7b177375c79b575c1caac9",
-    "short_commit": "4fc1972",
+    "commit": "94fc7f3bbbefaecec7e52cd50908d0a1ac2e21d4",
+    "short_commit": "94fc7f3",
     "branch": "claude/manuscript-revision-code-j9hc9b",
-    "describe": "4fc1972",
+    "describe": "94fc7f3",
     "dirty": false
   },
   "software_versions": {
@@ -279,6 +279,28 @@
       ]
     }
   },
+  "csv_outputs": [
+    "00_derived_pk_constants.csv",
+    "00_source_printed_value_checks.csv",
+    "00_verification_internal.csv",
+    "01_calibrated_k_all_models.csv",
+    "01b_monte_carlo_draws.csv",
+    "02_agreement_primary.csv",
+    "03_agreement_stratified.csv",
+    "04_objective_sensitivity.csv",
+    "05_loa_weight_sensitivity.csv",
+    "06_input_sensitivity.csv",
+    "07_calibration_endpoint_comparison.csv",
+    "08_prime_timing_sensitivity.csv",
+    "09_parameter_uncertainty.csv",
+    "09b_parameter_uncertainty_draws.csv",
+    "10_coverage_full_range_and_boundary.csv",
+    "11_shifted_institutions.csv",
+    "12_topup_grid.csv",
+    "13_topup_worst_case.csv",
+    "14_correlated_inputs.csv",
+    "15_worked_example.csv"
+  ],
   "outstanding_author_decisions": [
     {
       "comment": "EB-4 / R1 p11 L46",
