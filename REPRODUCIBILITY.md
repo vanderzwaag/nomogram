@@ -12,8 +12,15 @@ python -m pytest tests/ -q               # the full suite, including implementat
 ```
 
 Pure Python; no system packages. `requirements.txt` installs current releases
-instead, which run the pipeline but do not guarantee the published numbers to
-the last digit.
+instead: the numbers agree, but the last bits need not, because a different
+scipy converges its optimiser a fraction differently and a different pandas can
+format a float differently. Measured drift against an environment a major
+release behind (numpy 2.2.6, scipy 1.15.3, pandas 2.3.3) is 5e-14 at worst, in
+a p-value -- fourteen orders of magnitude below anything reported.
+
+`python check_frozen.py <dir>` compares a run against the archive: numbers
+equal to a relative tolerance by default, byte-identical with `--exact`. Both
+run in CI, the second in the pinned environment.
 
 `outputs/frozen/summary.md` holds the values to quote; `outputs/frozen/manifest.json`
 records the seed, the git commit, the package versions and every analysis
@@ -216,6 +223,7 @@ evidence travel together.
 | `benchmarks.py` | Implementation verification and the per-source benchmark table. |
 | `k_table_io.py` | Reads and writes `data/k_tables/*.csv`, the decay-constant lookup tables, each with a JSON provenance header. No pickles. |
 | `run_analysis.py` | The single command above. |
+| `check_frozen.py` | Checks a fresh run against the archive: numbers equal to a tolerance by default, byte-identical with `--exact`. |
 | `nomogram_models.py` | Dashboard-facing wrappers, PDF generation, figures. |
 | `streamlit_app.py` | The dashboard. |
 | `nomogram_render.py` | Nomogram geometry and rendering. Shared by the printed PDF and the interactive chart. No PyNomo, PyX, LaTeX or Ghostscript. |

@@ -72,8 +72,19 @@ python make_supplementary_figures.py
 
 `outputs/frozen/summary.md` holds every value in manuscript-ready tables.
 `outputs/frozen/manifest.json` records the seed, the git commit, package
-versions and every analysis decision. Re-running with the same seed reproduces
-every file byte-for-byte.
+versions and every analysis decision.
+
+To check a run against the archive:
+
+```bash
+python check_frozen.py outputs/frozen
+```
+
+With the pinned environment the files are byte-identical; on current releases
+the numbers agree but the last bits may not, because a different scipy
+converges its optimiser a fraction differently. Measured drift against an
+environment a major release behind is 5e-14 at worst, in a p-value. Pass
+`--exact` to require identical bytes.
 
 `python run_analysis.py --help` lists the options: the cohort, the calibration
 objective, the evaluation mode, the prime-timing convention and the sample
@@ -132,6 +143,7 @@ are recorded per model in `nomogram_core.MODEL_PARAMETERS`.
 | `nomogram_render.py` | Nomogram geometry and rendering, shared by the printed PDF and the interactive chart. |
 | `k_table_io.py` | Reads and writes `data/k_tables/*.csv`, the decay-constant lookup tables, each with a JSON provenance header. No pickles: unpickling a file shipped in a repository executes whatever is in it. |
 | `run_analysis.py` | Regenerates every reported number from one seeded command. |
+| `check_frozen.py` | Checks a fresh run against the archive: numbers equal to a tolerance by default, byte-identical with `--exact`. |
 | `make_supplementary_figures.py` | Main-text Figure 2 and supplementary figures S1–S4. |
 | `nomogram_models.py` | Dashboard-facing wrappers and figures. |
 | `streamlit_app.py` | The dashboard. |
