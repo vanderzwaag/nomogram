@@ -1,7 +1,7 @@
 # Frozen analysis run
 
-- Generated: 2026-09-19T15:18:35.932965+00:00
-- Commit: `6ca200c`
+- Generated: 2026-09-19T15:19:05.530656+00:00
+- Commit: `595a66b`
 - Seed: `20260912`
 - Cohort: grid_snapped_70_15_60: 400 IU/kg, prime 5000 IU, IBW 70+/-10 kg, time to CPB 15+/-3.75 min, time on CPB 60+/-15 min [adult]
 - Sign convention: Difference = reference model - nomogram (positive = nomogram under-estimates)
@@ -10,7 +10,7 @@
 - Clinical threshold: 1000 IU (10 mg protamine at 1 mg:100 IU) or 10%
 - Software: python 3.11.15, numpy 2.4.6, scipy 1.17.1, pandas 3.0.5
 
-## Calibrated decay constant, all 5 active models (EB-8)
+## Calibrated decay constant, every active reference model (EB-8)
 
 | Model | Population | k (/min) | MC sampling interval | Apparent t1/2 (min) |
 |---|---|---|---|---|
