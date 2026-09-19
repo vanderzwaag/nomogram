@@ -1,7 +1,7 @@
 # Frozen analysis run
 
-- Generated: 2026-09-19T16:55:59.387016+00:00
-- Commit: `a81cfec`
+- Generated: 2026-09-19T17:08:38.061094+00:00
+- Commit: `628aee6`
 - Seed: `20260912`
 - Cohort: grid_snapped_70_15_60: 400 IU/kg, prime 5000 IU, IBW 70+/-10 kg, time to CPB 15+/-3.75 min, time on CPB 60+/-15 min [adult]
 - Sign convention: Difference = reference model - nomogram (positive = nomogram under-estimates)
@@ -211,4 +211,4 @@ Reading the residual load off the nomogram requires no calculation; converting i
 
 ## Outstanding author actions
 
-- **EB-4 / R1 p11 L46** -- Correct the manuscript's description of the Jia model
+None. Every analysis decision is recorded under `decisions` in `manifest.json`; the scope boundaries are recorded there too and are design choices, not unresolved questions.

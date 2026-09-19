@@ -1,5 +1,5 @@
 {
-  "generated_utc": "2026-09-19T16:55:59.387016+00:00",
+  "generated_utc": "2026-09-19T17:08:38.061094+00:00",
   "analysis_version": "2.0.0",
   "core_version": "2.0.0",
   "render_version": "2.0.0",
@@ -20,10 +20,10 @@
   },
   "command_line": "run_analysis.py --seed 20260912 --outdir outputs/frozen",
   "git": {
-    "commit": "a81cfec18858ce7476b89205145d4716e1de1161",
-    "short_commit": "a81cfec",
+    "commit": "628aee6851da9d8ffc16bd93e31fe4029bb0ca9b",
+    "short_commit": "628aee6",
     "branch": "claude/manuscript-revision-code-j9hc9b",
-    "describe": "a81cfec",
+    "describe": "628aee6",
     "dirty": false
   },
   "software_versions": {
@@ -301,11 +301,5 @@
     "14_correlated_inputs.csv",
     "15_worked_example.csv"
   ],
-  "outstanding_author_decisions": [
-    {
-      "comment": "EB-4 / R1 p11 L46",
-      "action": "Correct the manuscript's description of the Jia model",
-      "detail": "Jia is an ADULT model derived in a relatively small-bodied population, not a paediatric one. Its Vc of 3.04 L is within 2% of Delavenne's adult 3.1 L. The reviewers' request for a paediatric parameter space follows from the manuscript's own mis-description and is answered by correcting the text. The model carries no weight covariate, so it cannot be individualised by weight and the upper end of the adult calibration grid extrapolates beyond its derivation population; both are stated limitations. Transportability to a small-bodied adult population is evaluated explicitly."
-    }
-  ]
+  "outstanding_author_decisions": []
 }
