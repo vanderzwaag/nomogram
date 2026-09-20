@@ -186,7 +186,7 @@ seed, so adding a stage cannot shift the numbers produced by the others.
 is and why, per reviewer comment, together with the defects corrected in the
 course of making the analysis reproducible.
 
-**Verification.** 25 automatic checks confirm each closed-form solution actually
+**Verification.** Automatic checks confirm each closed-form solution actually
 solves its own differential equations and satisfies the identities they imply.
 Six landmark values from a published simulation (Delavenne Figure 3) are
 reproduced to within 3.0%. No participant-level data from any source study is

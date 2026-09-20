@@ -187,7 +187,8 @@ comment identifiers (EB-1…EB-8, R1, R2) are given where a change answers one.
   effect quantified: matching the reference convention raises *k* by 3.3–3.5%.
 - **Correlated-input sensitivity (R2).** Gaussian copula over weight, time to
   bypass and time on bypass at correlations of 0.3 and 0.6.
-- **Implementation verification (EB-6).** 25 automatic checks: each closed form
+- **Implementation verification (EB-6).** Automatic checks, one set per active
+  model and counted in `00_verification_internal.csv`: each closed form
   is confirmed to solve its own differential equations numerically and to
   satisfy the identities they imply — A(0) = dose, ∫A·dt = dose·Vc/Cl, terminal
   slope = −β, dose linearity, prime timing.

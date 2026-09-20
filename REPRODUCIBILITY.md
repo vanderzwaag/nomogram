@@ -46,7 +46,7 @@ on the same machine it reproduces every CSV byte-for-byte.
 | EB-4 | Calibration can target the reversal endpoint or the decay trajectory; both are reported so the manuscript's claim can match what was evaluated. |
 | EB-4 | Full-range and boundary coverage grids; nine shifted simulated institutions, including one matching the small-bodied adult population the Jia model was derived in. |
 | EB-5 | Top-up grid over bolus sizes x timings x repeats, with worst case as well as mean; prime-timing convention stated and its effect on k quantified. |
-| EB-6 | Automatic implementation verification (25 checks), unit tests, a table of derived PK constants for comparison against each source, and a run manifest recording seeds and versions. |
+| EB-6 | Automatic implementation verification, unit tests, a table of derived PK constants for comparison against each source, and a run manifest recording seeds and versions. |
 | EB-8 | k and its interval for every active model; the calibration grid defined in code (`parameter_spaces.describe_grids()`) and printed in `summary.md`. |
 | R2 | Correlated-input sensitivity via a Gaussian copula. |
 
@@ -186,7 +186,7 @@ publication". Three distinct things are folded into that, and they are not
 equally achievable:
 
 1. **Does the code implement the published equations, given the published
-   parameters?** Fully automatic. 25 checks run on every analysis and in the
+   parameters?** Fully automatic. These checks run on every analysis and in the
    test suite: each closed-form solution is confirmed to solve its own
    differential equations numerically, and to satisfy the identities they imply
    — A(0) = dose, ∫A·dt = dose·Vc/Cl, terminal slope = −β, dose linearity, and
