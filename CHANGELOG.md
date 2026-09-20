@@ -10,7 +10,7 @@ to within floating-point rounding anywhere else. See [REPRODUCIBILITY.md](REPROD
 
 ---
 
-## [2.0.0] — 2026-09-13
+## [2.0.0] — 2026-09-20
 
 A major release. It carries breaking changes to the public API, changes every
 statistic the project reports, removes one reference model from the active
