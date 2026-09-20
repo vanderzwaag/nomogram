@@ -271,7 +271,9 @@ branch as of commit `def13e5`.
 > designation, not what the code reported.
 
 Release 2.0.0 is archived at
-doi:[10.5281/zenodo.22846043](https://doi.org/10.5281/zenodo.22846043).
+doi:[10.5281/zenodo.22846043](https://doi.org/10.5281/zenodo.22846043). The
+concept DOI [10.5281/zenodo.22846042](https://doi.org/10.5281/zenodo.22846042)
+resolves to whichever release is current.
 
 [2.0.0]: https://github.com/vanderzwaag/nomogram/releases/tag/v2.0.0
 [1.0.0]: https://github.com/vanderzwaag/nomogram/tree/main

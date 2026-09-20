@@ -11,7 +11,7 @@ heparin, and renders the result as an institution-specific decay nomogram.
 Supporting code for manuscript **JCVA-D-26-01511**. Every number the manuscript
 reports regenerates from one seeded command at a tagged commit.
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22846043.svg)](https://doi.org/10.5281/zenodo.22846043)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22846042.svg)](https://doi.org/10.5281/zenodo.22846042)
 [![tests](https://github.com/vanderzwaag/nomogram/actions/workflows/tests.yml/badge.svg)](https://github.com/vanderzwaag/nomogram/actions/workflows/tests.yml)
 
 ---
@@ -234,9 +234,16 @@ revision — replace with volume, pages and DOI on acceptance.
 nomogram pipeline*, version 2.0.0. Zenodo, 2026.
 doi:[10.5281/zenodo.22846043](https://doi.org/10.5281/zenodo.22846043)
 
-Cite the version you actually ran: 2.0.0 changes every statistic 1.x reported,
-so a citation without a version is ambiguous about which numbers are meant. The
-DOI above is the version DOI for 2.0.0 and always resolves to this release.
+Zenodo mints two DOIs, and which one to use depends on what you mean:
+
+| DOI | Resolves to | Use it when |
+|---|---|---|
+| [10.5281/zenodo.22846043](https://doi.org/10.5281/zenodo.22846043) | release 2.0.0, permanently | the point is which numbers were produced |
+| [10.5281/zenodo.22846042](https://doi.org/10.5281/zenodo.22846042) | the latest release, always | the point is the software in general |
+
+Cite the version DOI in a paper reporting results from this pipeline: 2.0.0
+changes every statistic 1.x reported, so a citation without a version is
+ambiguous about which numbers are meant.
 
 ## Generative AI declaration
 

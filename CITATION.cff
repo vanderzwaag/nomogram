@@ -25,10 +25,15 @@ authors:
     given-names: "Jens"
     affiliation: "Institute of Cardiac Anaesthesia, Medical Faculty Carl Gustav Carus and Heart Centre, TUD Dresden University of Technology, Dresden, Germany"
 # Version DOI for the v2.0.0 deposit, reserved on Zenodo before publication so
-# the archived code contains its own identifier. Zenodo also mints a concept
-# DOI on publication that always resolves to the newest version; add it as
-# identifiers: -> type: doi once it is known.
+# the archived code carries its own identifier.
 doi: "10.5281/zenodo.22846043"
+identifiers:
+  - type: doi
+    value: "10.5281/zenodo.22846042"
+    description: >-
+      Concept DOI: resolves to the latest version of this software. Cite this
+      one for the software in general, and the version DOI above when the point
+      is which numbers were produced.
 preferred-citation:
   type: article
   title: >-
